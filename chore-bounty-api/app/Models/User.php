@@ -13,7 +13,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password'])]
+#[Fillable(['name', 'email', 'password', 'avatar'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -72,5 +72,16 @@ class User extends Authenticatable
             RewardRedemption::class,
             'redeemed_by'
         );
+    }
+
+    public function assignedBounties(): HasMany
+    {
+        return $this->hasMany(Bounty::class, 'assignee_id');
+    }
+
+    public function completedBounties(): HasMany
+    {
+        return $this->hasMany(Bounty::class, 'assignee_id')
+            ->where('status', 'completed');
     }
 }

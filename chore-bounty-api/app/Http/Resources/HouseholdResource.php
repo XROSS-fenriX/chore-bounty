@@ -13,6 +13,10 @@ class HouseholdResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'invite_code' => $this->invite_code,
+            'created_by' => $this->created_by,
+            'role' => $this->pivot?->role ?? ($this->created_by === $request->user()?->id ? 'owner' : 'member'),
+            'members_count' => $this->members_count ?? $this->members()->count(),
+            'bounties_count' => $this->bounties_count ?? $this->bounties()->count(),
             'creator' => new UserResource(
                 $this->whenLoaded('creator')
             ),

@@ -39,7 +39,16 @@ class AuthService {
     final token = j['token'] ?? j['access_token'];
     if (token is String) await storage.save(token);
     final u = j['user'] ?? j['data'];
-    if (u is Map) return AppUser.fromJson(Map<String, dynamic>.from(u));
+    if (u is Map) {
+      final user = AppUser.fromJson(Map<String, dynamic>.from(u));
+      if (user.avatar == null) {
+        final localAvatar = await storage.readAvatar();
+        if (localAvatar != null && localAvatar.isNotEmpty) {
+          return user.copyWith(avatar: localAvatar);
+        }
+      }
+      return user;
+    }
     if (token is String) return me();
     throw const FormatException('Expected token and user in response');
   }
@@ -47,15 +56,45 @@ class AuthService {
   Future<AppUser> me() async {
     final r = await api.dio.get('/auth/me');
     final j = Map<String, dynamic>.from(r.data as Map);
-    return AppUser.fromJson(
+    final user = AppUser.fromJson(
       Map<String, dynamic>.from((j['user'] ?? j['data'] ?? j) as Map),
     );
+    if (user.avatar == null) {
+      final localAvatar = await storage.readAvatar();
+      if (localAvatar != null && localAvatar.isNotEmpty) {
+        return user.copyWith(avatar: localAvatar);
+      }
+    }
+    return user;
+  }
+
+  Future<AppUser> updateAvatar(String avatarId) async {
+    await storage.saveAvatar(avatarId);
+    try {
+      final r = await api.dio.put(
+        '/user/avatar',
+        data: {'avatar': avatarId},
+      );
+      if (r.data is Map) {
+        final j = Map<String, dynamic>.from(r.data as Map);
+        final u = j['user'] ?? j['data'];
+        if (u is Map) {
+          return AppUser.fromJson(Map<String, dynamic>.from(u));
+        }
+      }
+      return me();
+    } on DioException {
+      // Re-throw so caller can display error toast while local fallback persists
+      rethrow;
+    }
   }
 
   Future<void> logout() async {
     try {
       await api.dio.post('/auth/logout');
-    } on DioException {}
+    } on DioException catch (_) {
+      // Ignore network errors when clearing local session
+    }
     await storage.clear();
   }
 

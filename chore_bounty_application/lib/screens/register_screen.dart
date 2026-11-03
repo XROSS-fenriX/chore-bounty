@@ -1,17 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../core/api_client.dart';
+import '../core/token_storage.dart';
 import '../services/auth_service.dart';
 import '../services/bounty_service.dart';
-import '../widgets/ui.dart';
+import '../services/household_service.dart';
 import 'home_shell.dart';
+import 'household_prompt_screen.dart';
 import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key, required this.auth, required this.bounties});
+  const RegisterScreen({
+    super.key,
+    this.auth,
+    this.bounties,
+    this.households,
+  });
 
-  final AuthService auth;
-  final BountyService bounties;
+  final AuthService? auth;
+  final BountyService? bounties;
+  final HouseholdService? households;
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -24,6 +33,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final email = TextEditingController();
   final pass = TextEditingController();
   final confirm = TextEditingController();
+
+  late final TokenStorage _storage = TokenStorage();
+  late final ApiClient _api = ApiClient(_storage);
+  late final AuthService auth = widget.auth ?? AuthService(_api, _storage);
+  late final BountyService bounties = widget.bounties ?? BountyService(_api);
+  late final HouseholdService households =
+      widget.households ?? HouseholdService(_api);
 
   bool busy = false;
   bool hidePass = true;
@@ -56,7 +72,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      final user = await widget.auth.register(
+      final user = await auth.register(
         name.text.trim(),
         email.text.trim(),
         pass.text,
@@ -65,22 +81,44 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       if (!mounted) return;
 
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (_) => HomeShell(
-            auth: widget.auth,
-            bounties: widget.bounties,
-            user: user,
+      if (!user.hasHouseholds) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HouseholdPromptScreen(
+              auth: auth,
+              bounties: bounties,
+              households: households,
+              user: user,
+            ),
           ),
-        ),
-        (_) => false,
-      );
+          (route) => false,
+        );
+      } else {
+        await auth.storage.saveHouseholdId(
+          user.households.first.id.toString(),
+        );
+
+        if (!mounted) return;
+
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HomeShell(
+              auth: auth,
+              bounties: bounties,
+              households: households,
+              user: user,
+            ),
+          ),
+          (route) => false,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        error = widget.auth.error(e);
+        error = auth.error(e);
       });
     } finally {
       if (mounted) {
@@ -143,247 +181,258 @@ class _RegisterScreenState extends State<RegisterScreen> {
       body: Stack(
         children: [
           // 1. Full-bleed Background
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: screenHeight * 0.35,
+          Positioned.fill(
+            bottom: screenHeight * 0.40,
             child: Image.asset(
               'assets/images/welcome_hero_bg.jpg',
               fit: BoxFit.cover,
             ),
           ),
 
-          // 2. Top App Bar / Back Navigation
-          SafeArea(
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Navigator.canPop(context)
-                    ? CircleAvatar(
-                        backgroundColor: Colors.white.withOpacity(0.85),
-                        child: IconButton(
-                          icon: const Icon(
-                            Icons.arrow_back_ios_new_rounded,
-                            color: darkTextColor,
-                            size: 18,
-                          ),
-                          onPressed: () => Navigator.of(context).maybePop(),
-                        ),
-                      )
-                    : const SizedBox.shrink(),
+          // 2. Back Button
+          Positioned(
+            top: 24,
+            left: 8,
+            child: SafeArea(
+              child: CircleAvatar(
+                backgroundColor: Colors.white.withValues(alpha: 0.85),
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: darkTextColor,
+                    size: 18,
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                ),
               ),
             ),
           ),
 
-          // 3. Full-width Curved Bottom Sheet containing the Form
+          // 3. Floating Mascot / Logo
           Positioned(
-            top: screenHeight * 0.16,
+            top: screenHeight * 0.04,
             left: 0,
             right: 0,
-            bottom: 0,
+            child: Center(
+              child: Image.asset(
+                'assets/images/welcome_hero_logo.png',
+                width: 140,
+                height: 140,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+
+          // 4. White curved form sheet
+          Align(
+            alignment: Alignment.bottomCenter,
             child: ClipPath(
               clipper: TopCurveClipper(),
               child: Container(
+                width: double.infinity,
+                height: screenHeight * 0.78,
                 color: Colors.white,
-                padding: const EdgeInsets.fromLTRB(24, 38, 24, 16),
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: SafeArea(
-                    top: false,
+                child: SafeArea(
+                  top: false,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(28, 48, 28, 20),
                     child: Form(
                       key: form,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const SizedBox(height: 8),
                           Text(
-                            'Join the Household',
-                            textAlign: TextAlign.center,
+                            'Create Account',
                             style: GoogleFonts.nunito(
-                              fontSize: 26,
+                              fontSize: 30,
                               fontWeight: FontWeight.w900,
                               color: darkTextColor,
+                              letterSpacing: -0.5,
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 6),
                           Text(
-                            'Create your account and start earning rewards!',
-                            textAlign: TextAlign.center,
+                            'Join your roommates and start earning bounties.',
                             style: GoogleFonts.nunito(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
-                              color: Colors.black45,
+                              color: const Color(0xFF8C7362),
                             ),
                           ),
                           const SizedBox(height: 24),
 
-                          // Name
+                          // Name field
                           TextFormField(
                             controller: name,
                             textCapitalization: TextCapitalization.words,
-                            textInputAction: TextInputAction.next,
-                            style: GoogleFonts.nunito(
-                              fontWeight: FontWeight.w700,
-                            ),
                             decoration: _inputDecoration(
-                              labelText: 'Full name',
-                              prefixIcon: Icons.person_rounded,
+                              labelText: 'Your Name',
+                              prefixIcon: Icons.person_outline_rounded,
+                              hintText: 'e.g. Alex Mercer',
                             ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Name is required.';
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) {
+                                return 'Please enter your name';
                               }
                               return null;
                             },
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 16),
 
-                          // Email
+                          // Email field
                           TextFormField(
                             controller: email,
                             keyboardType: TextInputType.emailAddress,
-                            textInputAction: TextInputAction.next,
-                            autocorrect: false,
-                            style: GoogleFonts.nunito(
-                              fontWeight: FontWeight.w700,
-                            ),
                             decoration: _inputDecoration(
-                              labelText: 'Email address',
-                              hintText: 'you@example.com',
-                              prefixIcon: Icons.email_rounded,
+                              labelText: 'Email Address',
+                              prefixIcon: Icons.mail_outline_rounded,
+                              hintText: 'e.g. alex@example.com',
                             ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Email is required.';
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) {
+                                return 'Please enter your email';
                               }
-                              if (!value.contains('@')) {
-                                return 'Enter a valid email address.';
+                              if (!v.contains('@') || !v.contains('.')) {
+                                return 'Please enter a valid email address';
                               }
                               return null;
                             },
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 16),
 
-                          // Password
+                          // Password field
                           TextFormField(
                             controller: pass,
                             obscureText: hidePass,
-                            textInputAction: TextInputAction.next,
-                            style: GoogleFonts.nunito(
-                              fontWeight: FontWeight.w700,
-                            ),
                             decoration: _inputDecoration(
                               labelText: 'Password',
-                              helperText: 'Use at least 8 characters.',
-                              prefixIcon: Icons.lock_rounded,
+                              prefixIcon: Icons.lock_outline_rounded,
+                              hintText: 'At least 8 characters',
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   hidePass
-                                      ? Icons.visibility_off_rounded
-                                      : Icons.visibility_rounded,
-                                  color: Colors.grey,
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  color: Colors.grey.shade500,
                                 ),
-                                onPressed: () =>
-                                    setState(() => hidePass = !hidePass),
+                                onPressed: () {
+                                  setState(() {
+                                    hidePass = !hidePass;
+                                  });
+                                },
                               ),
                             ),
-                            validator: (value) {
-                              if (value == null || value.length < 8) {
-                                return 'Use at least 8 characters.';
+                            validator: (v) {
+                              if (v == null || v.length < 8) {
+                                return 'Password must be at least 8 characters';
                               }
                               return null;
                             },
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 16),
 
-                          // Confirm Password
+                          // Confirm Password field
                           TextFormField(
                             controller: confirm,
                             obscureText: hideConfirm,
-                            textInputAction: TextInputAction.done,
-                            style: GoogleFonts.nunito(
-                              fontWeight: FontWeight.w700,
-                            ),
-                            onFieldSubmitted: (_) {
-                              if (!busy) submit();
-                            },
                             decoration: _inputDecoration(
-                              labelText: 'Confirm password',
+                              labelText: 'Confirm Password',
                               prefixIcon: Icons.lock_reset_rounded,
+                              hintText: 'Re-enter your password',
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   hideConfirm
-                                      ? Icons.visibility_off_rounded
-                                      : Icons.visibility_rounded,
-                                  color: Colors.grey,
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  color: Colors.grey.shade500,
                                 ),
-                                onPressed: () =>
-                                    setState(() => hideConfirm = !hideConfirm),
+                                onPressed: () {
+                                  setState(() {
+                                    hideConfirm = !hideConfirm;
+                                  });
+                                },
                               ),
                             ),
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Please confirm your password.';
-                              }
-                              if (value != pass.text) {
-                                return 'Passwords do not match.';
+                            validator: (v) {
+                              if (v != pass.text) {
+                                return 'Passwords do not match';
                               }
                               return null;
                             },
                           ),
+                          const SizedBox(height: 16),
 
-                          // Error
                           if (error != null) ...[
-                            const SizedBox(height: 14),
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 14,
-                                vertical: 12,
+                                vertical: 10,
                               ),
                               decoration: BoxDecoration(
                                 color: Colors.red.shade50,
-                                borderRadius: BorderRadius.circular(14),
+                                borderRadius: BorderRadius.circular(12),
                                 border: Border.all(color: Colors.red.shade200),
                               ),
                               child: Row(
                                 children: [
-                                  Icon(
+                                  const Icon(
                                     Icons.error_outline_rounded,
-                                    color: Colors.red.shade700,
-                                    size: 20,
+                                    color: Colors.redAccent,
+                                    size: 18,
                                   ),
-                                  const SizedBox(width: 10),
+                                  const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
                                       error!,
                                       style: GoogleFonts.nunito(
-                                        color: Colors.red.shade800,
-                                        fontSize: 13,
+                                        color: Colors.redAccent,
                                         fontWeight: FontWeight.w700,
+                                        fontSize: 12,
                                       ),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
+                            const SizedBox(height: 16),
                           ],
-
-                          const SizedBox(height: 22),
 
                           // Submit Button
                           SizedBox(
-                            height: 54,
-                            child: GreenButton(
-                              'Create Account',
-                              loading: busy,
+                            height: 56,
+                            child: ElevatedButton(
                               onPressed: busy ? null : submit,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryGreen,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(28),
+                                ),
+                              ),
+                              child: busy
+                                  ? const SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
+                                        valueColor: AlwaysStoppedAnimation(
+                                          Colors.white,
+                                        ),
+                                      ),
+                                    )
+                                  : Text(
+                                      'Create Account',
+                                      style: GoogleFonts.nunito(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
                             ),
                           ),
                           const SizedBox(height: 16),
 
-                          // Sign In Link
+                          // Switch to Sign In
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -401,9 +450,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                         Navigator.pushReplacement(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (_) => LoginScreen(
-                                              auth: widget.auth,
-                                              bounties: widget.bounties,
+                                            builder: (context) => LoginScreen(
+                                              auth: auth,
+                                              bounties: bounties,
+                                              households: households,
                                             ),
                                           ),
                                         );

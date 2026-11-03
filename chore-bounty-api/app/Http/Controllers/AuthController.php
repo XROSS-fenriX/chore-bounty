@@ -26,6 +26,7 @@ class AuthController extends Controller
         ]);
 
         $token = $user->createToken('chorebounty-mobile')->plainTextToken;
+        $user->load('households');
 
         return response()->json([
             'message' => 'Account registered successfully.',
@@ -51,6 +52,7 @@ class AuthController extends Controller
         }
 
         $token = $user->createToken('chorebounty-mobile')->plainTextToken;
+        $user->load('households');
 
         return response()->json([
             'message' => 'Login successful.',

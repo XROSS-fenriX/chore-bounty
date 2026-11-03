@@ -2,10 +2,10 @@ import 'package:dio/dio.dart';
 import 'token_storage.dart';
 
 class ApiClient {
-  ApiClient(this.storage)
+  ApiClient(this.storage, {String? customBaseUrl})
     : dio = Dio(
         BaseOptions(
-          baseUrl: 'http://10.0.2.2:8000/api',
+          baseUrl: customBaseUrl ?? 'http://10.0.2.2:8000/api',
           connectTimeout: const Duration(seconds: 15),
           receiveTimeout: const Duration(seconds: 15),
           headers: const {
@@ -16,15 +16,23 @@ class ApiClient {
       ) {
     dio.interceptors.add(
       InterceptorsWrapper(
-        onRequest: (o, h) async {
-          final t = await storage.read();
-          if (t != null && t.isNotEmpty)
-            o.headers['Authorization'] = 'Bearer $t';
-          h.next(o);
+        onRequest: (options, handler) async {
+          final token = await storage.read();
+          if (token != null && token.isNotEmpty) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
+
+          final householdId = await storage.readHouseholdId();
+          if (householdId != null && householdId.isNotEmpty) {
+            options.headers['X-Household-Id'] = householdId;
+          }
+
+          handler.next(options);
         },
       ),
     );
   }
+
   final TokenStorage storage;
   final Dio dio;
 }

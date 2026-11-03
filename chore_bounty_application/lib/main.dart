@@ -3,6 +3,7 @@ import 'core/api_client.dart';
 import 'core/token_storage.dart';
 import 'services/auth_service.dart';
 import 'services/bounty_service.dart';
+import 'services/household_service.dart';
 import 'screens/auth_gate.dart';
 
 void main() {
@@ -12,12 +13,15 @@ void main() {
 
 class ChoreBountyApp extends StatelessWidget {
   const ChoreBountyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     final storage = TokenStorage();
     final api = ApiClient(storage);
     final auth = AuthService(api, storage);
     final bounties = BountyService(api);
+    final households = HouseholdService(api);
+
     return MaterialApp(
       title: 'ChoreBounty',
       debugShowCheckedModeBanner: false,
@@ -44,7 +48,11 @@ class ChoreBountyApp extends StatelessWidget {
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
         ),
       ),
-      home: AuthGate(auth: auth, bounties: bounties),
+      home: AuthGate(
+        auth: auth,
+        bounties: bounties,
+        households: households,
+      ),
     );
   }
 }

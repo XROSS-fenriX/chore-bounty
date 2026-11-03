@@ -1,16 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../core/api_client.dart';
+import '../core/token_storage.dart';
 import '../services/auth_service.dart';
 import '../services/bounty_service.dart';
+import '../services/household_service.dart';
 import 'login_screen.dart';
 import 'register_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
-  const WelcomeScreen({super.key, required this.auth, required this.bounties});
+  WelcomeScreen({
+    super.key,
+    this.auth,
+    this.bounties,
+    this.households,
+  });
 
-  final AuthService auth;
-  final BountyService bounties;
+  final AuthService? auth;
+  final BountyService? bounties;
+  final HouseholdService? households;
+
+  late final TokenStorage _storage = TokenStorage();
+  late final ApiClient _api = ApiClient(_storage);
+  late final AuthService _effectiveAuth =
+      auth ?? AuthService(_api, _storage);
+  late final BountyService _effectiveBounties =
+      bounties ?? BountyService(_api);
+  late final HouseholdService _effectiveHouseholds =
+      households ?? HouseholdService(_api);
 
   static const Color primaryGreen = Color(0xFF289851);
   static const Color darkTextColor = Color(0xFF6B452D);
@@ -37,12 +55,11 @@ class WelcomeScreen extends StatelessWidget {
             top: 24,
             left: 0,
             right: 0,
-            height: screenHeight * 0.68, // Expanded container height
+            height: screenHeight * 0.68,
             child: SafeArea(
               child: Center(
                 child: FractionallySizedBox(
-                  widthFactor:
-                      0.98, // Scaled nearly edge-to-edge for high presence
+                  widthFactor: 0.98,
                   child: Image.asset(
                     'assets/images/welcome_hero_logo.png',
                     fit: BoxFit.contain,
@@ -60,21 +77,41 @@ class WelcomeScreen extends StatelessWidget {
               clipper: TopCurveClipper(),
               child: Container(
                 width: double.infinity,
-                color: Colors.white,
-                padding: const EdgeInsets.fromLTRB(28.0, 48.0, 28.0, 36.0),
+                padding: const EdgeInsets.fromLTRB(28, 48, 28, 36),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Color(0x1A000000),
+                      blurRadius: 24,
+                      offset: Offset(0, -6),
+                    ),
+                  ],
+                ),
                 child: SafeArea(
                   top: false,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'A gamified task board for\nhappier, cleaner homes.',
+                        'Turn Chores Into Epic Bounties',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.nunito(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
                           color: darkTextColor,
-                          height: 1.35,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Complete household tasks, earn real-world rewards from your roommates, and climb the apartment leaderboard.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.nunito(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF8C7362),
+                          height: 1.4,
                         ),
                       ),
                       const SizedBox(height: 28),
@@ -87,9 +124,10 @@ class WelcomeScreen extends StatelessWidget {
                           onPressed: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (_) => RegisterScreen(
-                                  auth: auth,
-                                  bounties: bounties,
+                                builder: (context) => RegisterScreen(
+                                  auth: _effectiveAuth,
+                                  bounties: _effectiveBounties,
+                                  households: _effectiveHouseholds,
                                 ),
                               ),
                             );
@@ -121,8 +159,11 @@ class WelcomeScreen extends StatelessWidget {
                           onPressed: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (_) =>
-                                    LoginScreen(auth: auth, bounties: bounties),
+                                builder: (context) => LoginScreen(
+                                  auth: _effectiveAuth,
+                                  bounties: _effectiveBounties,
+                                  households: _effectiveHouseholds,
+                                ),
                               ),
                             );
                           },

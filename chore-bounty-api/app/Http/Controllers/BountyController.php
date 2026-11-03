@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreBountyRequest;
+use App\Http\Requests\UpdateBountyRequest;
 use App\Http\Resources\BountyResource;
 use App\Models\Bounty;
 use App\Models\Household;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Gate;
 
 class BountyController extends Controller
 {
@@ -17,38 +18,34 @@ class BountyController extends Controller
             ->whereHas('household.members', function ($q) use ($request) {
                 $q->where('users.id', $request->user()->id);
             })
-            ->with(['creator', 'activeClaim.user'])
+            ->with(['creator', 'assignee', 'household', 'activeClaim.user'])
             ->latest();
 
-        if ($request->filled('household_id')) {
-            $query->where('household_id', $request->integer('household_id'));
+        $householdId = $request->header('X-Household-Id') ?? $request->query('household_id');
+        if ($householdId) {
+            $query->where('household_id', (int) $householdId);
         }
 
         if ($request->filled('status')) {
-            $query->where('status', $request->input('status'));
+            $status = $request->input('status');
+            if ($status === 'available' || $status === 'open') {
+                $query->where('status', 'open');
+            } elseif ($status === 'in_progress' || $status === 'claimed') {
+                $query->whereIn('status', ['claimed', 'in_progress']);
+            } else {
+                $query->where('status', $status);
+            }
         }
 
-        return BountyResource::collection($query->paginate(15));
+        return BountyResource::collection($query->paginate(20));
     }
 
-    public function store(Request $request)
+    public function store(StoreBountyRequest $request)
     {
-        $validated = $request->validate([
-            'household_id' => ['required', 'exists:households,id'],
-            'title' => ['required', 'string', 'max:150'],
-            'description' => ['nullable', 'string'],
-            'difficulty' => [
-                'required',
-                Rule::in(['easy', 'medium', 'hard']),
-            ],
-            'reward_value' => ['nullable', 'numeric', 'min:0'],
-            'reward_description' => ['required', 'string', 'max:255'],
-            'due_at' => ['nullable', 'date', 'after:now'],
-        ]);
-
+        $validated = $request->validated();
         $household = Household::findOrFail($validated['household_id']);
 
-        // $this->authorize('view', $household);
+        Gate::authorize('create', [Bounty::class, $household->id]);
 
         $bounty = $household->bounties()->create([
             ...$validated,
@@ -56,18 +53,19 @@ class BountyController extends Controller
             'status' => 'open',
         ]);
 
-        return (new BountyResource($bounty->load('creator', 'household')))
+        return (new BountyResource($bounty->load(['creator', 'assignee', 'household'])))
             ->response()
             ->setStatusCode(201);
     }
 
     public function show(Bounty $bounty)
     {
-        // $this->authorize('view', $bounty->household);
+        Gate::authorize('view', $bounty);
 
         return new BountyResource(
             $bounty->load([
                 'creator',
+                'assignee',
                 'household',
                 'claims.user',
                 'claims.completions',
@@ -75,48 +73,18 @@ class BountyController extends Controller
         );
     }
 
-    public function update(Request $request, Bounty $bounty)
+    public function update(UpdateBountyRequest $request, Bounty $bounty)
     {
-        // $this->authorize('update', $bounty);
+        Gate::authorize('update', $bounty);
 
-        abort_unless(
-            $bounty->status === 'open',
-            422,
-            'Only open bounties can be edited.'
-        );
+        $bounty->update($request->validated());
 
-        $validated = $request->validate([
-            'title' => ['sometimes', 'required', 'string', 'max:150'],
-            'description' => ['sometimes', 'nullable', 'string'],
-            'difficulty' => [
-                'sometimes',
-                'required',
-                Rule::in(['easy', 'medium', 'hard']),
-            ],
-            'reward_value' => ['sometimes', 'nullable', 'numeric', 'min:0'],
-            'reward_description' => [
-                'sometimes',
-                'required',
-                'string',
-                'max:255',
-            ],
-            'due_at' => ['sometimes', 'nullable', 'date', 'after:now'],
-        ]);
-
-        $bounty->update($validated);
-
-        return new BountyResource($bounty->fresh()->load('creator'));
+        return new BountyResource($bounty->fresh()->load(['creator', 'assignee', 'household']));
     }
 
     public function destroy(Bounty $bounty)
     {
-        // $this->authorize('delete', $bounty);
-
-        abort_unless(
-            $bounty->status === 'open',
-            422,
-            'Only open bounties can be deleted.'
-        );
+        Gate::authorize('delete', $bounty);
 
         $bounty->delete();
 

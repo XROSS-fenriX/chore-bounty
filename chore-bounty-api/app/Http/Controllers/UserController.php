@@ -35,10 +35,26 @@ class UserController extends Controller
 
         $validated = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
+            'avatar' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
         $user->update($validated);
 
         return new UserResource($user->fresh());
+    }
+
+    public function updateAvatar(Request $request)
+    {
+        $validated = $request->validate([
+            'avatar' => ['required', 'string', 'max:255'],
+        ]);
+
+        $user = $request->user();
+        $user->update(['avatar' => $validated['avatar']]);
+
+        return response()->json([
+            'message' => 'Avatar updated successfully.',
+            'user' => new UserResource($user->fresh()),
+        ]);
     }
 }
