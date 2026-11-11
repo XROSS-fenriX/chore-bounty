@@ -15,7 +15,7 @@ class UserController extends Controller
             ->whereHas('households.members', function ($query) use ($request) {
                 $query->where('users.id', $request->user()->id);
             })
-            ->select(['id', 'name', 'email', 'created_at'])
+            ->select(['id', 'name', 'email', 'avatar', 'created_at'])
             ->distinct()
             ->paginate(15);
 

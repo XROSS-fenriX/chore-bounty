@@ -19,12 +19,19 @@ class CategoryIconWidget extends StatelessWidget {
       case 'laundry':
         return _buildLaundryIcon();
       case 'kitchen':
+      case 'dishes':
         return _buildKitchenIcon();
       case 'groceries':
+      case 'shopping':
         return _buildGroceriesIcon();
       case 'maintenance':
         return _buildMaintenanceIcon();
+      case 'trash':
+      case 'trash bin':
+      case 'waste':
+        return _buildTrashIcon();
       case 'other':
+      case 'miscellaneous':
       default:
         return _buildOtherIcon();
     }
@@ -35,12 +42,18 @@ class CategoryIconWidget extends StatelessWidget {
       width: size,
       height: size,
       child: Image.asset(
-        'assets/images/broom_stick.png',
+        'assets/images/icons/clean_icon.png',
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) {
-          return CustomPaint(
-            size: Size(size, size),
-            painter: _BroomPainter(),
+          return Image.asset(
+            'assets/images/broom_stick.png',
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              return CustomPaint(
+                size: Size(size, size),
+                painter: _BroomPainter(),
+              );
+            },
           );
         },
       ),
@@ -52,12 +65,18 @@ class CategoryIconWidget extends StatelessWidget {
       width: size,
       height: size,
       child: Image.asset(
-        'assets/images/washing_machine.png',
+        'assets/images/icons/laundry_icon.png',
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) {
-          return CustomPaint(
-            size: Size(size, size),
-            painter: _WashingMachinePainter(),
+          return Image.asset(
+            'assets/images/washing_machine.png',
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              return CustomPaint(
+                size: Size(size, size),
+                painter: _WashingMachinePainter(),
+              );
+            },
           );
         },
       ),
@@ -68,9 +87,15 @@ class CategoryIconWidget extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: CustomPaint(
-        size: Size(size, size),
-        painter: _CookingPotPainter(),
+      child: Image.asset(
+        'assets/images/icons/dishes_icon.png',
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return CustomPaint(
+            size: Size(size, size),
+            painter: _CookingPotPainter(),
+          );
+        },
       ),
     );
   }
@@ -79,9 +104,15 @@ class CategoryIconWidget extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: CustomPaint(
-        size: Size(size, size),
-        painter: _ShoppingCartPainter(),
+      child: Image.asset(
+        'assets/images/icons/shopping_icon.png',
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return CustomPaint(
+            size: Size(size, size),
+            painter: _ShoppingCartPainter(),
+          );
+        },
       ),
     );
   }
@@ -90,28 +121,70 @@ class CategoryIconWidget extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: CustomPaint(
-        size: Size(size, size),
-        painter: _WrenchPainter(),
+      child: Image.asset(
+        'assets/images/icons/maintenance_icon.png',
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return CustomPaint(
+            size: Size(size, size),
+            painter: _WrenchPainter(),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTrashIcon() {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Image.asset(
+        'assets/images/icons/trash_bin_icon.png',
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return Image.asset(
+            'assets/images/trash_bin.png',
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              return const SizedBox();
+            },
+          );
+        },
       ),
     );
   }
 
   Widget _buildOtherIcon() {
-    return Container(
-      width: size * 0.75,
-      height: size * 0.75,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: const Color(0xFFF1F5F9),
-        border: Border.all(color: const Color(0xFF94A3B8), width: 1.5),
-      ),
-      child: const Center(
-        child: Icon(
-          Icons.more_horiz_rounded,
-          color: Color(0xFF475569),
-          size: 18,
-        ),
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Image.asset(
+        'assets/images/icons/miscellaneous_icon.png',
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return Image.asset(
+            'assets/images/icons/miscellaneous-icon.png',
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                width: size * 0.75,
+                height: size * 0.75,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFFF1F5F9),
+                  border: Border.all(color: const Color(0xFF94A3B8), width: 1.5),
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.more_horiz_rounded,
+                    color: Color(0xFF475569),
+                    size: 18,
+                  ),
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }
@@ -132,39 +205,45 @@ class BountyCoinWidget extends StatelessWidget {
       width: size,
       height: size,
       child: Image.asset(
-        'assets/images/coin.png',
+        'assets/images/icons/coin_icon.png',
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) {
-          return Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFBBF24), Color(0xFFF59E0B), Color(0xFFD97706)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFF59E0B).withAlpha(70),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
+          return Image.asset(
+            'assets/images/coin.png',
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFBBF24), Color(0xFFF59E0B), Color(0xFFD97706)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFF59E0B).withAlpha(70),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                  border: Border.all(color: const Color(0xFFFDE68A), width: 1.5),
                 ),
-              ],
-              border: Border.all(color: const Color(0xFFFDE68A), width: 1.5),
-            ),
-            child: const Center(
-              child: Text(
-                '\$',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 16,
-                  height: 1.1,
+                child: const Center(
+                  child: Text(
+                    '¢',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                      height: 1.1,
+                    ),
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           );
         },
       ),

@@ -8,10 +8,16 @@ class DashboardBountyCard extends StatelessWidget {
     super.key,
     required this.bounty,
     required this.onTap,
+    this.currentUserId,
+    this.currentUserName,
+    this.margin,
   });
 
   final Bounty bounty;
   final VoidCallback onTap;
+  final String? currentUserId;
+  final String? currentUserName;
+  final EdgeInsetsGeometry? margin;
 
   String _formatTimeAgo(DateTime? date) {
     if (date == null) return '2h ago';
@@ -24,6 +30,48 @@ class DashboardBountyCard extends StatelessWidget {
     return '${(diff.inDays / 7).floor()}w ago';
   }
 
+  String _formatTimeLeft() {
+    final now = DateTime.now();
+    DateTime deadline;
+    if (bounty.dueAt != null) {
+      deadline = bounty.dueAt!;
+    } else if (bounty.createdAt != null) {
+      final cand = bounty.createdAt!.add(const Duration(days: 2));
+      deadline = cand.isAfter(now)
+          ? cand
+          : now.add(const Duration(days: 1, hours: 23, minutes: 59));
+    } else {
+      deadline = now.add(const Duration(days: 1, hours: 23, minutes: 59));
+    }
+
+    final diff = deadline.difference(now);
+    if (diff.isNegative || diff.inSeconds <= 0) {
+      return '0 Seconds';
+    }
+
+    final days = diff.inDays;
+    final hours = diff.inHours % 24;
+    final minutes = diff.inMinutes % 60;
+    final seconds = diff.inSeconds % 60;
+
+    final parts = <String>[];
+
+    if (days > 0) {
+      parts.add('$days ${days > 1 ? "Days" : "Day"}');
+    }
+    if (hours > 0) {
+      parts.add('$hours ${hours > 1 ? "Hours" : "Hour"}');
+    }
+    if (minutes > 0) {
+      parts.add('$minutes ${minutes > 1 ? "Minutes" : "Minute"}');
+    } else {
+      // Show seconds if the value of minute is 0
+      parts.add('$seconds ${seconds == 1 ? "Second" : "Seconds"}');
+    }
+
+    return parts.isEmpty ? '0 Seconds' : parts.join(', ');
+  }
+
   Widget _buildChoreIcon() {
     final t = bounty.title.toLowerCase();
     final c = bounty.category.toLowerCase();
@@ -31,30 +79,30 @@ class DashboardBountyCard extends StatelessWidget {
     Color bgColor = const Color(0xFFFEF3C7); // Soft peach default
     Widget iconWidget;
 
-    if (t.contains('trash') || t.contains('bin') || t.contains('garbage') || t.contains('rubbish')) {
+    if (t.contains('trash') || t.contains('bin') || t.contains('garbage') || t.contains('rubbish') || c == 'trash') {
       bgColor = const Color(0xFFD1FAE5); // Mint
-      iconWidget = const TrashBinWidget(size: 32);
+      iconWidget = const TrashBinWidget(size: 44);
     } else if (t.contains('vacuum') || t.contains('living room') || t.contains('carpet') || t.contains('rug')) {
       bgColor = const Color(0xFFFEF3C7); // Apricot/Peach
-      iconWidget = const VacuumCleanerWidget(size: 32);
+      iconWidget = const VacuumCleanerWidget(size: 44);
     } else if (t.contains('laundry') || t.contains('wash') || c == 'laundry' || t.contains('clothes')) {
       bgColor = const Color(0xFFEDE9FE); // Lavender
-      iconWidget = const CategoryIconWidget(category: 'Laundry', size: 32);
+      iconWidget = const CategoryIconWidget(category: 'Laundry', size: 44);
     } else if (t.contains('clean') || t.contains('sweep') || t.contains('mop') || c == 'cleaning') {
       bgColor = const Color(0xFFFEF3C7); // Peach
-      iconWidget = const CategoryIconWidget(category: 'Cleaning', size: 32);
-    } else if (t.contains('kitchen') || t.contains('dish') || c == 'kitchen' || t.contains('cook')) {
+      iconWidget = const CategoryIconWidget(category: 'Cleaning', size: 44);
+    } else if (t.contains('kitchen') || t.contains('dish') || c == 'kitchen' || c == 'dishes' || t.contains('cook')) {
       bgColor = const Color(0xFFFFEDD5); // Soft orange
-      iconWidget = const CategoryIconWidget(category: 'Kitchen', size: 32);
-    } else if (t.contains('grocer') || t.contains('shop') || c == 'groceries' || t.contains('market')) {
+      iconWidget = const CategoryIconWidget(category: 'Kitchen', size: 44);
+    } else if (t.contains('grocer') || t.contains('shop') || c == 'groceries' || c == 'shopping' || t.contains('market')) {
       bgColor = const Color(0xFFE0F2FE); // Soft blue
-      iconWidget = const CategoryIconWidget(category: 'Groceries', size: 32);
+      iconWidget = const CategoryIconWidget(category: 'Groceries', size: 44);
     } else if (t.contains('fix') || t.contains('repair') || c == 'maintenance' || t.contains('bulb')) {
       bgColor = const Color(0xFFF1F5F9); // Slate
-      iconWidget = const CategoryIconWidget(category: 'Maintenance', size: 32);
+      iconWidget = const CategoryIconWidget(category: 'Maintenance', size: 44);
     } else {
       bgColor = const Color(0xFFF1F5F9);
-      iconWidget = CategoryIconWidget(category: bounty.category, size: 32);
+      iconWidget = CategoryIconWidget(category: bounty.category, size: 44);
     }
 
     return Container(
@@ -68,56 +116,33 @@ class DashboardBountyCard extends StatelessWidget {
     );
   }
 
-  Widget _buildDifficultyChip() {
-    final diff = bounty.difficulty.toLowerCase();
-
-    Color pillBg;
-    Color pillTextColor;
-    IconData icon;
-    String label;
-
-    switch (diff) {
-      case 'epic':
-      case 'hard':
-        pillBg = const Color(0xFFFEE2E2);
-        pillTextColor = const Color(0xFFB91C1C);
-        icon = Icons.star_rounded;
-        label = diff == 'epic' ? 'Epic' : 'Hard';
-        break;
-      case 'medium':
-      case 'moderate':
-        pillBg = const Color(0xFFFFEDD5);
-        pillTextColor = const Color(0xFFC2410C);
-        icon = Icons.access_time_filled_rounded;
-        label = 'Medium';
-        break;
-      case 'easy':
-      default:
-        pillBg = const Color(0xFFDCFCE7);
-        pillTextColor = const Color(0xFF15803D);
-        icon = Icons.check_circle_rounded;
-        label = 'Quick';
-        break;
-    }
-
+  Widget _buildTimeLeftChip() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
       decoration: BoxDecoration(
-        color: pillBg,
+        color: const Color(0xFFEFF6FF),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: pillTextColor),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: pillTextColor,
-              letterSpacing: -0.1,
+          const Icon(
+            Icons.access_time_rounded,
+            size: 11,
+            color: Color(0xFF2563EB),
+          ),
+          const SizedBox(width: 3),
+          Flexible(
+            child: Text(
+              _formatTimeLeft(),
+              style: const TextStyle(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF2563EB),
+                letterSpacing: -0.2,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -133,8 +158,20 @@ class DashboardBountyCard extends StatelessWidget {
             ? bounty.rewardValue!.toInt()
             : bounty.xpReward);
 
+    final isCreator = (currentUserId != null &&
+            currentUserId!.isNotEmpty &&
+            bounty.creatorId.isNotEmpty &&
+            currentUserId == bounty.creatorId) ||
+        (currentUserName != null &&
+            currentUserName!.isNotEmpty &&
+            bounty.creator.isNotEmpty &&
+            currentUserName!.trim().toLowerCase() ==
+                bounty.creator.trim().toLowerCase());
+
+    final creatorName = isCreator ? 'you' : bounty.creator.split(' ').first;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: margin ?? const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -180,11 +217,11 @@ class DashboardBountyCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 5),
 
-                      // Reward & Difficulty Pills
+                      // Reward & Time Left Pills
                       Row(
                         children: [
                           const BountyCoinWidget(size: 18),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 5),
                           Text(
                             '$rewardDisplay',
                             style: const TextStyle(
@@ -193,15 +230,17 @@ class DashboardBountyCard extends StatelessWidget {
                               color: Color(0xFF1E293B),
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          _buildDifficultyChip(),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: _buildTimeLeftChip(),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 5),
 
                       // Posted by author • Time ago
                       Text(
-                        'Posted by ${bounty.creator.split(' ').first} • ${_formatTimeAgo(bounty.createdAt ?? bounty.claimedAt)}',
+                        'Posted by $creatorName • ${_formatTimeAgo(bounty.createdAt ?? bounty.claimedAt)}',
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,

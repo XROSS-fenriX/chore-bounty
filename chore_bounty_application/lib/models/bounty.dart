@@ -5,8 +5,10 @@ class Bounty {
     this.householdId = '',
     this.creatorId = '',
     this.creator = '',
+    this.creatorAvatar,
     this.assigneeId,
     this.assignee,
+    this.assigneeAvatar,
     this.description = '',
     this.difficulty = 'easy',
     this.category = 'Other',
@@ -27,8 +29,10 @@ class Bounty {
   final String householdId;
   final String creatorId;
   final String creator;
+  final String? creatorAvatar;
   final String? assigneeId;
   final String? assignee;
+  final String? assigneeAvatar;
   final String title;
   final String description;
   final String difficulty;
@@ -49,6 +53,67 @@ class Bounty {
   bool get isClaimed => status == 'claimed' || status == 'in_progress';
   bool get isSubmitted => status == 'submitted';
   bool get isCompleted => status == 'completed';
+  bool get isCancelled => status == 'cancelled' || status == 'canceled';
+
+  static String inferCategory(String? category, String title, String description) {
+    final cat = (category ?? '').trim();
+    const difficultyKeywords = {'easy', 'medium', 'hard', 'epic'};
+    if (cat.isNotEmpty && !difficultyKeywords.contains(cat.toLowerCase())) {
+      return cat[0].toUpperCase() + cat.substring(1);
+    }
+    final combined = '$title $description'.toLowerCase();
+    if (combined.contains('laundry') ||
+        combined.contains('wash') ||
+        combined.contains('clothes')) {
+      return 'Laundry';
+    }
+    if (combined.contains('clean') ||
+        combined.contains('sweep') ||
+        combined.contains('mop') ||
+        combined.contains('vacuum') ||
+        combined.contains('dust') ||
+        combined.contains('trash') ||
+        combined.contains('bunnies') ||
+        combined.contains('room')) {
+      return 'Cleaning';
+    }
+    if (combined.contains('kitchen') ||
+        combined.contains('dish') ||
+        combined.contains('cook') ||
+        combined.contains('pots') ||
+        combined.contains('counter') ||
+        combined.contains('dishmore') ||
+        combined.contains('breakfast')) {
+      return 'Kitchen';
+    }
+    if (combined.contains('grocer') ||
+        combined.contains('shop') ||
+        combined.contains('dinner') ||
+        combined.contains('beans') ||
+        combined.contains('milk') ||
+        combined.contains('food') ||
+        combined.contains('market') ||
+        combined.contains('pizza')) {
+      return 'Groceries';
+    }
+    if (combined.contains('fix') ||
+        combined.contains('repair') ||
+        combined.contains('bulb') ||
+        combined.contains('maintenance')) {
+      return 'Maintenance';
+    }
+    return 'Other';
+  }
+
+  static String? _parseAvatar(dynamic userObj) {
+    if (userObj is! Map) return null;
+    final raw = (userObj['avatar'] ??
+            userObj['avatar_id'] ??
+            userObj['avatar_url'])
+        ?.toString()
+        .trim();
+    return (raw != null && raw.isNotEmpty) ? raw : null;
+  }
 
   factory Bounty.fromJson(Map<String, dynamic> j) {
     final v = j['reward_value'] ?? j['points'] ?? 0;
@@ -60,21 +125,72 @@ class Bounty {
 
     final c = j['creator'];
     final creatorName = c is Map ? (c['name'] ?? '').toString() : (j['creator_name'] ?? '').toString();
+    final creatorAvatar = _parseAvatar(c) ??
+        (j['creator_avatar'] ?? j['creator_avatar_id'])?.toString().trim();
 
     final a = j['assignee'];
-    final assigneeName = a is Map ? (a['name'] ?? '').toString() : (j['assignee_name'] ?? '').toString();
+    var assigneeId = j['assignee_id']?.toString();
+    var assigneeName = a is Map ? (a['name'] ?? '').toString() : (j['assignee_name'] ?? '').toString();
+    var assigneeAvatar = _parseAvatar(a) ??
+        (j['assignee_avatar'] ?? j['assignee_avatar_id'])?.toString().trim();
+
+    // Fall back to active_claim / claims user details when assignee isn't populated directly.
+    if (assigneeName.isEmpty || assigneeAvatar == null || assigneeAvatar.isEmpty) {
+      final claimCandidates = <Map>[];
+      if (j['active_claim'] is Map) {
+        claimCandidates.add(j['active_claim'] as Map);
+      }
+      if (j['claims'] is List) {
+        for (final item in (j['claims'] as List)) {
+          if (item is Map) claimCandidates.add(item);
+        }
+      }
+      Map? chosenClaim;
+      for (final claim in claimCandidates) {
+        final claimUserId = claim['user_id']?.toString();
+        final claimStatus = claim['status']?.toString();
+        if (assigneeId != null && assigneeId.isNotEmpty && claimUserId == assigneeId) {
+          chosenClaim = claim;
+          break;
+        }
+        if (chosenClaim == null &&
+            (claimStatus == 'active' || claimStatus == 'completed')) {
+          chosenClaim = claim;
+        }
+      }
+      if (chosenClaim != null) {
+        final claimUser = chosenClaim['user'];
+        if (assigneeId == null || assigneeId.isEmpty) {
+          assigneeId = chosenClaim['user_id']?.toString();
+        }
+        if (claimUser is Map) {
+          if (assigneeName.isEmpty) {
+            assigneeName = (claimUser['name'] ?? '').toString();
+          }
+          if (assigneeAvatar == null || assigneeAvatar.isEmpty) {
+            assigneeAvatar = _parseAvatar(claimUser);
+          }
+        }
+      }
+    }
 
     return Bounty(
       id: (j['id'] ?? j['bounty_id'] ?? '').toString(),
       householdId: (j['household_id'] ?? '').toString(),
       creatorId: (j['creator_id'] ?? j['created_by'] ?? '').toString(),
       creator: creatorName.isNotEmpty ? creatorName : 'Roommate',
-      assigneeId: j['assignee_id']?.toString(),
+      creatorAvatar: (creatorAvatar != null && creatorAvatar.isNotEmpty) ? creatorAvatar : null,
+      assigneeId: assigneeId,
       assignee: assigneeName.isNotEmpty ? assigneeName : null,
+      assigneeAvatar: (assigneeAvatar != null && assigneeAvatar.isNotEmpty) ? assigneeAvatar : null,
       title: (j['title'] ?? j['bounty_title'] ?? 'Untitled bounty').toString(),
       description: (j['description'] ?? '').toString(),
       difficulty: (j['difficulty'] ?? 'easy').toString(),
-      category: (j['category'] ?? j['difficulty'] ?? 'General').toString(),
+      category: inferCategory(
+        j['category']?.toString(),
+        (j['title'] ?? j['bounty_title'] ?? '').toString(),
+        (j['description'] ?? '').toString(),
+      ),
       xpReward: xp,
       points: pointsInt,
       rewardValue: parsedValue,

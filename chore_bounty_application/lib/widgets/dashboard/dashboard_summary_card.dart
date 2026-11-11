@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
-import '../bounty_form/bounty_category_icons.dart';
-import 'dashboard_illustrations.dart';
 
 class DashboardSummaryCard extends StatelessWidget {
   const DashboardSummaryCard({
     super.key,
     required this.points,
     required this.tasksOngoing,
+    this.householdName,
     this.onTap,
+    this.onHouseholdTap,
   });
 
   final int points;
   final int tasksOngoing;
+  final String? householdName;
   final VoidCallback? onTap;
+  final VoidCallback? onHouseholdTap;
 
   @override
   Widget build(BuildContext context) {
@@ -21,84 +23,186 @@ class DashboardSummaryCard extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [
-            Color(0xFFCDEBD6),
-            Color(0xFFB5E2C1),
+            Color(0xFF1B8354), // Rich emerald green
+            Color(0xFF166E45), // Deep balanced forest green
+            Color(0xFF0F5435), // Dark luxurious shadow green
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: Colors.white.withAlpha(50),
+          width: 1.2,
+        ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1B8354).withAlpha(20),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF0F5435).withAlpha(55),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       clipBehavior: Clip.antiAlias,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                // Coin Badge
-                const BountyCoinWidget(size: 32),
-                const SizedBox(width: 12),
+      child: Stack(
+        children: [
+          // Ambient background accent circles
+          Positioned(
+            top: -28,
+            right: -20,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withAlpha(16),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -38,
+            right: 48,
+            child: Container(
+              width: 90,
+              height: 90,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF86EFAC).withAlpha(22),
+              ),
+            ),
+          ),
 
-                // Points & Tasks Info
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
+          // Card Content
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(22),
+              splashColor: Colors.white.withAlpha(25),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                child: Row(
+                  children: [
+                    // Points & Tasks Info (White Fonts)
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '$points',
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF0F172A),
-                              letterSpacing: -0.5,
-                            ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Text(
+                                '$points',
+                                style: const TextStyle(
+                                  fontSize: 30,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                  letterSpacing: -0.6,
+                                  height: 1.0,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Points',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white.withAlpha(235),
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 5),
-                          const Text(
-                            'Points',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF334155),
-                            ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(0xFF86EFAC),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF86EFAC).withAlpha(150),
+                                      blurRadius: 4,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 7),
+                              Text(
+                                tasksOngoing == 1
+                                    ? '1 task ongoing'
+                                    : '$tasksOngoing tasks ongoing',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white.withAlpha(210),
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '$tasksOngoing tasks ongoing',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF475569),
+                    ),
+
+                    // Household Dropdown (styled to match card background)
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: onHouseholdTap ?? onTap,
+                        borderRadius: BorderRadius.circular(20),
+                        splashColor: Colors.white.withAlpha(40),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withAlpha(30),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Colors.white.withAlpha(65),
+                              width: 1.0,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 110),
+                                child: Text(
+                                  (householdName != null && householdName!.isNotEmpty)
+                                      ? householdName!
+                                      : 'Apartment',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                    letterSpacing: -0.2,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                size: 18,
+                                color: Colors.white.withAlpha(220),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-
-                // Potted Plant / Nightstand Illustration
-                const SummaryCardIllustration(),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

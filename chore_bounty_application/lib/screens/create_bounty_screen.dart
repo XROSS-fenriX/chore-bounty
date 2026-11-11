@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/bounty.dart';
 import '../services/bounty_service.dart';
 import '../widgets/bounty_form/bounty_category_grid.dart';
 import '../widgets/bounty_form/bounty_date_time_picker.dart';
@@ -11,10 +12,14 @@ class CreateBounty extends StatefulWidget {
     super.key,
     required this.service,
     this.currentHouseholdId,
+    this.bountyToEdit,
   });
 
   final BountyService service;
   final int? currentHouseholdId;
+  final Bounty? bountyToEdit;
+
+  bool get isEditing => bountyToEdit != null;
 
   @override
   State<CreateBounty> createState() => _CreateBountyState();
@@ -22,14 +27,30 @@ class CreateBounty extends StatefulWidget {
 
 class _CreateBountyState extends State<CreateBounty> {
   final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _rewardController = TextEditingController(text: '50');
+  late final TextEditingController _titleController;
+  late final TextEditingController _descriptionController;
+  late final TextEditingController _rewardController;
 
   String _selectedCategory = 'Cleaning';
   DateTime? _dueDate;
   bool _busy = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final b = widget.bountyToEdit;
+    _titleController = TextEditingController(text: b?.title ?? '');
+    _descriptionController = TextEditingController(text: b?.description ?? '');
+    final reward = b != null
+        ? (b.points > 0 ? b.points : (b.rewardValue?.toInt() ?? 50))
+        : 50;
+    _rewardController = TextEditingController(text: '$reward');
+    if (b != null && b.category.isNotEmpty) {
+      _selectedCategory = b.category;
+    }
+    _dueDate = b?.dueAt;
+  }
 
   @override
   void dispose() {
@@ -54,20 +75,6 @@ class _CreateBountyState extends State<CreateBounty> {
     }
   }
 
-  int get _xpReward {
-    switch (_difficulty) {
-      case 'epic':
-        return 250;
-      case 'hard':
-        return 200;
-      case 'medium':
-        return 100;
-      case 'easy':
-      default:
-        return 50;
-    }
-  }
-
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -88,9 +95,10 @@ class _CreateBountyState extends State<CreateBounty> {
         'description': _descriptionController.text.trim(),
         'category': _selectedCategory,
         'difficulty': _difficulty,
-        'xp_reward': _xpReward,
+        'points': rewardValue.toInt(),
+        'xp_reward': rewardValue.toInt(),
         'reward_value': rewardValue,
-        'reward_description': '${rewardValue.toInt()} Coins',
+        'reward_description': '${rewardValue.toInt()} Tokens',
       };
 
       if (_dueDate != null) {
@@ -101,7 +109,11 @@ class _CreateBountyState extends State<CreateBounty> {
         payload['household_id'] = widget.currentHouseholdId;
       }
 
-      await widget.service.create(payload);
+      if (widget.isEditing) {
+        await widget.service.update(widget.bountyToEdit!.id, payload);
+      } else {
+        await widget.service.create(payload);
+      }
 
       if (mounted) {
         Navigator.pop(context, true);
@@ -136,9 +148,9 @@ class _CreateBountyState extends State<CreateBounty> {
           ),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Create Bounty',
-          style: TextStyle(
+        title: Text(
+          widget.isEditing ? 'Edit Bounty' : 'Create Bounty',
+          style: const TextStyle(
             color: Color(0xFF1E293B),
             fontSize: 19,
             fontWeight: FontWeight.w700,
@@ -255,9 +267,9 @@ class _CreateBountyState extends State<CreateBounty> {
                             color: Colors.white,
                           ),
                         )
-                      : const Text(
-                          'Post Bounty',
-                          style: TextStyle(
+                      : Text(
+                          widget.isEditing ? 'Save Changes' : 'Post Bounty',
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,

@@ -4,130 +4,100 @@ import '../avatar/user_avatar_widget.dart';
 class DashboardHeader extends StatelessWidget {
   const DashboardHeader({
     super.key,
-    required this.userName,
+    this.userName,
     this.avatarId,
     this.householdName,
+    this.notificationCount = 0,
     this.onNotificationTap,
     this.onProfileTap,
+    this.onHouseholdTap,
+    this.onMenuTap,
   });
 
-  final String userName;
+  final String? userName;
   final String? avatarId;
   final String? householdName;
+  final int notificationCount;
   final VoidCallback? onNotificationTap;
   final VoidCallback? onProfileTap;
-
-  String get _greeting {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning,';
-    if (hour < 17) return 'Good afternoon,';
-    return 'Good evening,';
-  }
+  final VoidCallback? onHouseholdTap;
+  final VoidCallback? onMenuTap;
 
   @override
   Widget build(BuildContext context) {
-    final displayName = userName.trim().isEmpty ? 'Friend' : userName.trim().split(' ').first;
-
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Avatar
-        UserAvatarWidget(
-          avatarId: avatarId,
-          userName: userName,
-          size: 46,
-          onTap: onProfileTap,
-        ),
-        const SizedBox(width: 12),
-
-        // Greeting and Name
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                _greeting,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF64748B),
-                  letterSpacing: -0.2,
-                ),
-              ),
-              const SizedBox(height: 1),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    child: Text(
-                      '$displayName!',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1E293B),
-                        letterSpacing: -0.4,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (householdName != null && householdName!.isNotEmpty) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1B8354).withAlpha(20),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        householdName!,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1B8354),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        ),
-
-        // Notification Bell Icon Button
+        // Hamburger Menu Button (Left side)
         Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: onNotificationTap,
+            onTap: () {
+              if (onMenuTap != null) {
+                onMenuTap!();
+              } else {
+                Scaffold.maybeOf(context)?.openDrawer();
+              }
+            },
             borderRadius: BorderRadius.circular(24),
-            child: Container(
+            child: const SizedBox(
               width: 44,
               height: 44,
-              alignment: Alignment.center,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  const Icon(
-                    Icons.notifications_none_rounded,
-                    color: Color(0xFF1E293B),
-                    size: 26,
-                  ),
-                  Positioned(
-                    top: 10,
-                    right: 11,
-                    child: Container(
-                      width: 7,
-                      height: 7,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFEF4444),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-                ],
+              child: Icon(
+                Icons.menu_rounded,
+                color: Color(0xFF1E293B),
+                size: 28,
               ),
             ),
           ),
+        ),
+
+        // Notification Bell Icon Button and Profile Avatar (Right side)
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onNotificationTap,
+                borderRadius: BorderRadius.circular(24),
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      const Icon(
+                        Icons.notifications_none_rounded,
+                        color: Color(0xFF1E293B),
+                        size: 26,
+                      ),
+                      if (notificationCount > 0)
+                        Positioned(
+                          top: 10,
+                          right: 11,
+                          child: Container(
+                            width: 7,
+                            height: 7,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFEF4444),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            UserAvatarWidget(
+              avatarId: avatarId,
+              userName: userName ?? '',
+              size: 46,
+              onTap: onProfileTap,
+            ),
+          ],
         ),
       ],
     );

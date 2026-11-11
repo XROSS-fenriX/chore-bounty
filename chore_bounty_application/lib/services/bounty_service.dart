@@ -27,8 +27,23 @@ class BountyService {
     return _list(res.data);
   }
 
+  Future<Bounty> show(String id) async {
+    final res = await api.dio.get('/bounties/$id');
+    final raw = res.data is Map
+        ? (res.data['data'] ?? res.data['bounty'] ?? res.data)
+        : res.data;
+    if (raw is! Map) {
+      throw const FormatException('Unexpected bounty response');
+    }
+    return Bounty.fromJson(Map<String, dynamic>.from(raw));
+  }
+
   Future<void> create(Map<String, dynamic> data) async {
     await api.dio.post('/bounties', data: data);
+  }
+
+  Future<void> update(String id, Map<String, dynamic> data) async {
+    await api.dio.put('/bounties/$id', data: data);
   }
 
   Future<void> claim(String id) async {

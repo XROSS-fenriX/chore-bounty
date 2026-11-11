@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/api_client.dart';
-import '../core/constants/rpg_theme.dart';
 import '../core/token_storage.dart';
 import '../models/app_user.dart';
 import '../models/household.dart';
@@ -30,9 +30,8 @@ class HouseholdPromptScreen extends StatefulWidget {
   State<HouseholdPromptScreen> createState() => _HouseholdPromptScreenState();
 }
 
-class _HouseholdPromptScreenState extends State<HouseholdPromptScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController tabController;
+class _HouseholdPromptScreenState extends State<HouseholdPromptScreen> {
+  int _activeTabIndex = 0; // 0: Create New, 1: Join by Code
   final createNameController = TextEditingController();
   final joinCodeController = TextEditingController();
 
@@ -47,14 +46,7 @@ class _HouseholdPromptScreenState extends State<HouseholdPromptScreen>
   String? errorMessage;
 
   @override
-  void initState() {
-    super.initState();
-    tabController = TabController(length: 2, vsync: this);
-  }
-
-  @override
   void dispose() {
-    tabController.dispose();
     createNameController.dispose();
     joinCodeController.dispose();
     super.dispose();
@@ -144,122 +136,299 @@ class _HouseholdPromptScreenState extends State<HouseholdPromptScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7FAF7),
-      appBar: AppBar(
-        title: Text(
-          widget.isOptional ? 'Add Household' : 'Household Setup',
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        leading: widget.isOptional
-            ? IconButton(
-                icon: const Icon(Icons.close_rounded),
-                onPressed: () => Navigator.pop(context),
-              )
-            : null,
+    const bgColor = Color(0xFFFAF8F5);
+    final displayName = widget.user.name.trim().isNotEmpty
+        ? widget.user.name.trim().split(' ').first
+        : 'Roommate';
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark.copyWith(
+        statusBarColor: Colors.transparent,
       ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(22),
-          children: [
-            Center(
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: RpgTheme.primaryGreen.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.holiday_village_rounded,
-                  size: 48,
-                  color: RpgTheme.primaryGreen,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              widget.isOptional
-                  ? 'Join or Create Household'
-                  : 'Welcome, ${widget.user.name.split(' ').first}!',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.4,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Chore bounties are shared among roommates. Choose whether to create a new apartment guild or join your roommates with an invite code.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 13,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 24),
+      child: Scaffold(
+        backgroundColor: bgColor,
+        body: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 1. Full-width Hero Header (Occupies whole screen width; contains Top Bar and Welcome greeting)
+              _buildFullWidthHeader(context, displayName),
 
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
-              ),
-              child: TabBar(
-                controller: tabController,
-                indicatorColor: RpgTheme.primaryGreen,
-                indicatorWeight: 3,
-                labelColor: RpgTheme.primaryGreen,
-                unselectedLabelColor: Colors.grey.shade600,
-                labelStyle: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14,
-                ),
-                tabs: const [
-                  Tab(icon: Icon(Icons.add_home_rounded), text: 'Create New'),
-                  Tab(icon: Icon(Icons.vpn_key_rounded), text: 'Join by Code'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            if (errorMessage != null) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.red.shade200),
-                ),
-                child: Row(
+              // 2. Main content area with standard comfortable padding
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 36),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Icon(Icons.error_outline, color: Colors.redAccent, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
+                    // Subtitle description
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
                       child: Text(
-                        errorMessage!,
-                        style: const TextStyle(
-                          color: Colors.redAccent,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
+                        'Create bounties for shared chores among roommates. Choose whether to create a new household or join an existing one with an invite code.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(0xFF64748B),
+                          fontSize: 13.5,
+                          height: 1.45,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
+                    ),
+                    const SizedBox(height: 22),
+
+                    // Segmented Mode Toggle (Pills)
+                    _buildModeToggle(),
+                    const SizedBox(height: 20),
+
+                    // Error message banner if any
+                    if (errorMessage != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFFCA5A5)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.error_outline_rounded,
+                              color: Color(0xFFDC2626),
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                errorMessage!,
+                                style: const TextStyle(
+                                  color: Color(0xFFDC2626),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Form Card (Create New or Join by Code)
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      child: _activeTabIndex == 0
+                          ? _buildCreateCard()
+                          : _buildJoinCard(),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
             ],
+          ),
+        ),
+      ),
+    );
+  }
 
-            SizedBox(
-              height: 280,
-              child: TabBarView(
-                controller: tabController,
-                children: [
-                  _buildCreateTab(),
-                  _buildJoinTab(),
-                ],
+  Widget _buildFullWidthHeader(BuildContext context, String displayName) {
+    final topPadding = MediaQuery.paddingOf(context).top;
+
+    return SizedBox(
+      width: double.infinity,
+      child: Stack(
+        children: [
+          // Background illustration spanning the entire screen width
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/household_header.jpg',
+              width: double.infinity,
+              fit: BoxFit.cover,
+              alignment: const Alignment(0, -0.08),
+            ),
+          ),
+
+          // Bottom white/cream blend gradient to make the title at the bottom fully visible and crisp
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 105,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: const [0.0, 0.32, 0.68, 1.0],
+                  colors: [
+                    const Color(0xFFFAF8F5).withAlpha(0),
+                    const Color(0xFFFAF8F5).withAlpha(170),
+                    const Color(0xFFFAF8F5).withAlpha(245),
+                    const Color(0xFFFAF8F5),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Header content overlaid inside the full-width illustration
+          Padding(
+            padding: EdgeInsets.only(
+              top: topPadding > 0 ? topPadding + 6 : 16,
+              bottom: 12,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Top Bar: Centered "Household Setup" Title
+                const SizedBox(
+                  height: 44,
+                  child: Center(
+                    child: Text(
+                      'Household Setup',
+                      style: TextStyle(
+                        color: Color(0xFF1E293B),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Spacer allowing the cozy house illustration to remain fully visible in the center
+                const SizedBox(height: 110),
+
+                // Greeting Title with mint highlighter accent moved inside the header background
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Positioned(
+                      bottom: 2,
+                      child: Container(
+                        height: 8,
+                        width: 130,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF86EFAC).withAlpha(160),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      'Welcome, $displayName!',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 25,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF1E293B),
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModeToggle() {
+    return Container(
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(8),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Create New Pill
+          Expanded(
+            child: _buildTogglePill(
+              title: 'Create New',
+              icon: Icons.add_home_rounded,
+              isSelected: _activeTabIndex == 0,
+              onTap: () {
+                if (_activeTabIndex != 0) {
+                  setState(() {
+                    _activeTabIndex = 0;
+                    errorMessage = null;
+                  });
+                }
+              },
+            ),
+          ),
+          const SizedBox(width: 4),
+
+          // Join by Code Pill
+          Expanded(
+            child: _buildTogglePill(
+              title: 'Join by Code',
+              icon: Icons.vpn_key_rounded,
+              isSelected: _activeTabIndex == 1,
+              onTap: () {
+                if (_activeTabIndex != 1) {
+                  setState(() {
+                    _activeTabIndex = 1;
+                    errorMessage = null;
+                  });
+                }
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTogglePill({
+    required String title,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    const primaryGreen = Color(0xFF1B8354);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        height: 48,
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFF0FDF4) : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF22C55E) : Colors.transparent,
+            width: isSelected ? 1.6 : 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isSelected ? primaryGreen : const Color(0xFF64748B),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected ? primaryGreen : const Color(0xFF64748B),
+                letterSpacing: -0.2,
               ),
             ),
           ],
@@ -268,119 +437,235 @@ class _HouseholdPromptScreenState extends State<HouseholdPromptScreen>
     );
   }
 
-  Widget _buildCreateTab() {
+  Widget _buildCreateCard() {
     return Container(
-      padding: const EdgeInsets.all(18),
+      key: const ValueKey('create_tab'),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(8),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
             'Household Name',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          ),
-          const SizedBox(height: 6),
-          TextField(
-            controller: createNameController,
-            decoration: const InputDecoration(
-              hintText: 'e.g. Apt 4B, Maple Street House',
-              prefixIcon: Icon(Icons.house_outlined),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1E293B),
+              letterSpacing: -0.2,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            'You will be designated as the Guild Owner and receive an invite code to share.',
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+          const SizedBox(height: 4),
+          const Text(
+            'Give your household a unique and recognizable name.',
+            style: TextStyle(
+              fontSize: 12.5,
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w500,
+            ),
           ),
-          const Spacer(),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: RpgTheme.primaryGreen,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
+          const SizedBox(height: 16),
+
+          // Input field
+          TextFormField(
+            controller: createNameController,
+            textCapitalization: TextCapitalization.words,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1E293B),
+            ),
+            cursorColor: const Color(0xFF1B8354),
+            decoration: InputDecoration(
+              hintText: 'e.g. Apt 4B, Maple Street House',
+              hintStyle: const TextStyle(
+                fontSize: 14.5,
+                color: Color(0xFF94A3B8),
+                fontWeight: FontWeight.normal,
+              ),
+              prefixIcon: const Icon(
+                Icons.home_outlined,
+                color: Color(0xFF64748B),
+                size: 22,
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFFCBD5E1), width: 1.4),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFF1B8354), width: 1.8),
               ),
             ),
+          ),
+          const SizedBox(height: 20),
+
+          // Submit Action Button
+          _buildSubmitButton(
+            label: 'Create Guild',
+            icon: Icons.add_circle_outline_rounded,
             onPressed: isBusy ? null : handleCreate,
-            icon: isBusy
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.check_circle_outline_rounded),
-            label: const Text(
-              'Create Guild',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildJoinTab() {
+  Widget _buildJoinCard() {
     return Container(
-      padding: const EdgeInsets.all(18),
+      key: const ValueKey('join_tab'),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(8),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
             'Apartment Invite Code',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1E293B),
+              letterSpacing: -0.2,
+            ),
           ),
-          const SizedBox(height: 6),
-          TextField(
+          const SizedBox(height: 4),
+          const Text(
+            'Enter the 6-character code shared by your roommate.',
+            style: TextStyle(
+              fontSize: 12.5,
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Input field
+          TextFormField(
             controller: joinCodeController,
             textCapitalization: TextCapitalization.characters,
-            decoration: const InputDecoration(
-              hintText: 'e.g. GUILD4B or APT4B123',
-              prefixIcon: Icon(Icons.key_rounded),
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1E293B),
+              letterSpacing: 1.0,
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Ask your roommate for their household invite code to join their chore board.',
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
-          ),
-          const Spacer(),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: RpgTheme.primaryGreen,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
+            cursorColor: const Color(0xFF1B8354),
+            decoration: InputDecoration(
+              hintText: 'e.g. GUILD4B or APT4B123',
+              hintStyle: const TextStyle(
+                fontSize: 14.5,
+                color: Color(0xFF94A3B8),
+                fontWeight: FontWeight.normal,
+                letterSpacing: 0,
+              ),
+              prefixIcon: const Icon(
+                Icons.key_rounded,
+                color: Color(0xFF64748B),
+                size: 22,
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFFCBD5E1), width: 1.4),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFF1B8354), width: 1.8),
               ),
             ),
+          ),
+          const SizedBox(height: 20),
+
+          // Submit Action Button
+          _buildSubmitButton(
+            label: 'Join Household',
+            icon: Icons.login_rounded,
             onPressed: isBusy ? null : handleJoin,
-            icon: isBusy
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.login_rounded),
-            label: const Text(
-              'Join Household',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSubmitButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback? onPressed,
+  }) {
+    final isEnabled = onPressed != null && !isBusy;
+    const primaryGreen = Color(0xFF1B8354);
+
+    return SizedBox(
+      height: 54,
+      width: double.infinity,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: isEnabled ? primaryGreen : const Color(0xFFA7F3D0),
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            if (isEnabled)
+              BoxShadow(
+                color: primaryGreen.withAlpha(50),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+          ],
+        ),
+        child: ElevatedButton.icon(
+          onPressed: onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+            ),
+          ),
+          icon: isBusy
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    color: Colors.white,
+                  ),
+                )
+              : Icon(icon, color: Colors.white, size: 20),
+          label: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+              letterSpacing: -0.2,
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -36,7 +36,7 @@ class BountyLifecycleTest extends TestCase
             'title' => 'Vanquish the Mount Dishmore',
             'description' => 'Load and run the dishwasher, wipe down counter.',
             'difficulty' => 'medium',
-            'reward_value' => 15.00,
+            'reward_value' => 100.00,
             'reward_description' => '1 Free Iced Caramel Macchiato',
             'xp_reward' => 100,
         ]);
@@ -81,6 +81,7 @@ class BountyLifecycleTest extends TestCase
         $leaderboardResponse->assertStatus(200)
             ->assertJsonPath('data.0.name', 'John Connor')
             ->assertJsonPath('data.0.completed_bounties_count', 1)
+            ->assertJsonPath('data.0.total_tokens', 100)
             ->assertJsonPath('data.0.total_xp', 100);
     }
 }

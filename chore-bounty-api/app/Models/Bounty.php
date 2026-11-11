@@ -54,6 +54,39 @@ class Bounty extends Model
         );
     }
 
+    /**
+     * Resolve category name for the bounty.
+     */
+    protected function category(): Attribute
+    {
+        return Attribute::make(
+            get: function ($value, array $attributes) {
+                if (!empty($value)) {
+                    return $value;
+                }
+                $title = strtolower($attributes['title'] ?? '');
+                $desc = strtolower($attributes['description'] ?? '');
+                $text = $title . ' ' . $desc;
+                if (str_contains($text, 'laundry') || str_contains($text, 'clothes') || str_contains($text, 'wash')) {
+                    return 'Laundry';
+                }
+                if (str_contains($text, 'clean') || str_contains($text, 'sweep') || str_contains($text, 'mop') || str_contains($text, 'dust') || str_contains($text, 'vacuum') || str_contains($text, 'trash') || str_contains($text, 'bunnies') || str_contains($text, 'room')) {
+                    return 'Cleaning';
+                }
+                if (str_contains($text, 'kitchen') || str_contains($text, 'dish') || str_contains($text, 'cook') || str_contains($text, 'dishmore') || str_contains($text, 'counter') || str_contains($text, 'pots')) {
+                    return 'Kitchen';
+                }
+                if (str_contains($text, 'grocer') || str_contains($text, 'shop') || str_contains($text, 'dinner') || str_contains($text, 'beans') || str_contains($text, 'milk') || str_contains($text, 'food') || str_contains($text, 'market') || str_contains($text, 'pizza')) {
+                    return 'Groceries';
+                }
+                if (str_contains($text, 'fix') || str_contains($text, 'repair') || str_contains($text, 'bulb') || str_contains($text, 'maintenance')) {
+                    return 'Maintenance';
+                }
+                return 'Other';
+            }
+        );
+    }
+
     public function household(): BelongsTo
     {
         return $this->belongsTo(Household::class);

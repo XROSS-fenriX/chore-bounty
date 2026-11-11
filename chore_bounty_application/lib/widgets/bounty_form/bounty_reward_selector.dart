@@ -38,7 +38,7 @@ class BountyRewardSelector extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Select Bounty Reward (Coins)',
+                  'Select Bounty Reward (Tokens)',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -53,7 +53,7 @@ class BountyRewardSelector extends StatelessWidget {
                     final isSel = _currentValue == opt;
                     return ChoiceChip(
                       label: Text(
-                        '$opt Coins',
+                        '$opt Tokens',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: isSel ? Colors.white : const Color(0xFF1E293B),

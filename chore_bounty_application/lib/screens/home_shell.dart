@@ -11,12 +11,17 @@ import '../services/bounty_service.dart';
 import '../services/household_service.dart';
 import 'household_prompt_screen.dart';
 import 'login_screen.dart';
+import 'bounty_detail_screen.dart';
+export 'bounty_detail_screen.dart';
 import 'create_bounty_screen.dart';
 export 'create_bounty_screen.dart';
 import 'dashboard_view.dart';
 export 'dashboard_view.dart';
+import 'leaderboard_view.dart';
+export 'leaderboard_view.dart';
 import '../widgets/avatar/user_avatar_widget.dart';
 import '../widgets/avatar/avatar_picker_modal.dart';
+import '../widgets/bounty_form/bounty_category_icons.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({
@@ -37,6 +42,7 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int tab = 0;
   late AppUser currentUser;
   late Future<List<Bounty>> future;
@@ -46,6 +52,7 @@ class _HomeShellState extends State<HomeShell> {
   List<Household> myHouseholds = [];
   Household? currentHousehold;
   bool isHouseholdsLoading = false;
+  final Map<String, String> _memberAvatars = {};
 
   static const Color primaryGreen = Color(0xFF1B8354);
   static const Color bgLight = Color(0xFFFAF8F5);
@@ -54,9 +61,45 @@ class _HomeShellState extends State<HomeShell> {
   void initState() {
     super.initState();
     currentUser = widget.user;
+    if (currentUser.avatar != null && currentUser.avatar!.isNotEmpty) {
+      _memberAvatars['${currentUser.id}'] = currentUser.avatar!;
+    }
     future = widget.bounties.all();
     leaderboardFuture = widget.bounties.getLeaderboard();
     _initHouseholds();
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    refresh();
+  }
+
+  void _syncMemberAvatars(
+    List<Bounty> bounties,
+    List<LeaderboardEntry> leaderboard,
+  ) {
+    if (currentUser.avatar != null && currentUser.avatar!.isNotEmpty) {
+      _memberAvatars['${currentUser.id}'] = currentUser.avatar!;
+    }
+    for (final entry in leaderboard) {
+      if (entry.avatarUrl != null && entry.avatarUrl!.isNotEmpty) {
+        _memberAvatars['${entry.userId}'] = entry.avatarUrl!;
+      }
+    }
+    for (final bounty in bounties) {
+      if (bounty.creatorId.isNotEmpty &&
+          bounty.creatorAvatar != null &&
+          bounty.creatorAvatar!.isNotEmpty) {
+        _memberAvatars[bounty.creatorId] = bounty.creatorAvatar!;
+      }
+      if (bounty.assigneeId != null &&
+          bounty.assigneeId!.isNotEmpty &&
+          bounty.assigneeAvatar != null &&
+          bounty.assigneeAvatar!.isNotEmpty) {
+        _memberAvatars[bounty.assigneeId!] = bounty.assigneeAvatar!;
+      }
+    }
   }
 
   Future<void> changeAvatar() async {
@@ -75,7 +118,12 @@ class _HomeShellState extends State<HomeShell> {
           if (mounted) {
             setState(() {
               currentUser = updatedUser;
+              if (updatedUser.avatar != null && updatedUser.avatar!.isNotEmpty) {
+                _memberAvatars['${updatedUser.id}'] = updatedUser.avatar!;
+              }
             });
+            refresh();
+            if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: const Row(
@@ -191,7 +239,11 @@ class _HomeShellState extends State<HomeShell> {
     });
 
     try {
-      await Future.wait([future, leaderboardFuture]);
+      final bounties = await future;
+      final lb = await leaderboardFuture;
+      if (mounted) {
+        _syncMemberAvatars(bounties, lb);
+      }
     } catch (_) {
       // Handled by FutureBuilder
     }
@@ -459,7 +511,9 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: bgLight,
+      drawer: _buildDrawer(),
       body: SafeArea(
         bottom: false,
         child: IndexedStack(
@@ -467,89 +521,182 @@ class _HomeShellState extends State<HomeShell> {
           children: [questBoard(), myTasks(), leaderboardView(), profileView()],
         ),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: FloatingActionButton(
-        shape: const CircleBorder(),
-        backgroundColor: primaryGreen,
-        foregroundColor: Colors.white,
-        elevation: 4,
-        onPressed: create,
-        tooltip: 'Post Bounty',
-        child: const Icon(Icons.add_rounded, size: 32),
-      ),
-      bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8,
-        elevation: 10,
-        color: Colors.white,
-        clipBehavior: Clip.antiAlias,
-        child: SizedBox(
-          height: 60,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildNavItem(
-                icon: Icons.home_outlined,
-                activeIcon: Icons.home_rounded,
-                label: 'Home',
-                index: 0,
+    );
+  }
+
+  Widget _buildDrawer() {
+    return Drawer(
+      backgroundColor: Colors.white,
+      child: SafeArea(
+        child: Column(
+          children: [
+            // Navigation Items
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                children: [
+                  _buildDrawerNavItem(
+                    icon: Icons.home_outlined,
+                    activeIcon: Icons.home_rounded,
+                    label: 'Home',
+                    index: 0,
+                  ),
+                  _buildDrawerNavItem(
+                    icon: Icons.task_alt_outlined,
+                    activeIcon: Icons.task_alt_rounded,
+                    label: 'My Tasks',
+                    index: 1,
+                  ),
+                  _buildDrawerNavItem(
+                    icon: Icons.emoji_events_outlined,
+                    activeIcon: Icons.emoji_events_rounded,
+                    label: 'Leaderboard',
+                    index: 2,
+                  ),
+                  _buildDrawerNavItem(
+                    icon: Icons.person_outline_rounded,
+                    activeIcon: Icons.person_rounded,
+                    label: 'Profile',
+                    index: 3,
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                    child: Divider(color: Color(0xFFE2E8F0), thickness: 1),
+                  ),
+                  ListTile(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    leading: const Icon(Icons.add_circle_outline_rounded, color: primaryGreen),
+                    title: const Text(
+                      'Post a Bounty',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      create();
+                    },
+                  ),
+                  ListTile(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    leading: const Icon(Icons.swap_horiz_rounded, color: Color(0xFF64748B)),
+                    title: const Text(
+                      'Switch Household',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      openHouseholdSwitcher();
+                    },
+                  ),
+                ],
               ),
-              _buildNavItem(
-                icon: Icons.check_box_outlined,
-                activeIcon: Icons.check_box_rounded,
-                label: 'My Tasks',
-                index: 1,
+            ),
+
+            // User Profile Section (transferred to bottom)
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+              decoration: const BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Color(0xFFF1F5F9), width: 1.5),
+                ),
               ),
-              const SizedBox(width: 48),
-              _buildNavItem(
-                icon: Icons.military_tech_outlined,
-                activeIcon: Icons.military_tech_rounded,
-                label: 'Leaderboard',
-                index: 2,
+              child: InkWell(
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() => tab = 3);
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Row(
+                  children: [
+                    UserAvatarWidget(
+                      avatarId: currentUser.avatar,
+                      userName: currentUser.name,
+                      size: 48,
+                      onTap: () {
+                        Navigator.pop(context);
+                        setState(() => tab = 3);
+                      },
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            currentUser.name,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF0F172A),
+                              letterSpacing: -0.3,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            currentUser.email,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF64748B),
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              _buildNavItem(
-                icon: Icons.person_outline_rounded,
-                activeIcon: Icons.person_rounded,
-                label: 'Profile',
-                index: 3,
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildNavItem({
+  Widget _buildDrawerNavItem({
     required IconData icon,
     required IconData activeIcon,
     required String label,
     required int index,
   }) {
     final isSelected = tab == index;
-    final color = isSelected ? primaryGreen : Colors.grey.shade400;
-
-    return InkWell(
-      onTap: () => setState(() => tab = index),
-      customBorder: const CircleBorder(),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(isSelected ? activeIcon : icon, color: color, size: 24),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-                color: color,
-              ),
-            ),
-          ],
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      decoration: BoxDecoration(
+        color: isSelected ? primaryGreen.withValues(alpha: 0.12) : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        leading: Icon(
+          isSelected ? activeIcon : icon,
+          color: isSelected ? primaryGreen : const Color(0xFF64748B),
+          size: 24,
         ),
+        title: Text(
+          label,
+          style: TextStyle(
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            fontSize: 15,
+            color: isSelected ? primaryGreen : const Color(0xFF1E293B),
+          ),
+        ),
+        onTap: () {
+          Navigator.pop(context);
+          setState(() => tab = index);
+        },
       ),
     );
   }
@@ -566,6 +713,7 @@ class _HomeShellState extends State<HomeShell> {
           builder: (context, lbSnapshot) {
             final bountiesList = bountySnapshot.data ?? [];
             final leaderboardList = lbSnapshot.data ?? [];
+            _syncMemberAvatars(bountiesList, leaderboardList);
             final isLoading = bountySnapshot.connectionState == ConnectionState.waiting;
             final errorMessage = bountySnapshot.hasError ? widget.bounties.error(bountySnapshot.error!) : null;
 
@@ -583,6 +731,7 @@ class _HomeShellState extends State<HomeShell> {
               onNotificationTap: openHouseholdSwitcher,
               onProfileTap: () => setState(() => tab = 3),
               onViewMyTasks: () => setState(() => tab = 1),
+              onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
             );
           },
         );
@@ -683,24 +832,18 @@ class _HomeShellState extends State<HomeShell> {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(
-                            0xFFFFD166,
-                          ).withValues(alpha: 0.25),
+                          color: const Color(0xFF1B8354).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Row(
                           children: [
-                            const Icon(
-                              Icons.stars_rounded,
-                              size: 14,
-                              color: Color(0xFFB47D00),
-                            ),
+                            const BountyCoinWidget(size: 14),
                             const SizedBox(width: 4),
                             Text(
-                              '+${bounty.xpReward} XP',
+                              '+${bounty.points > 0 ? bounty.points : (bounty.rewardValue?.toInt() ?? 50)} Tokens',
                               style: const TextStyle(
-                                color: Color(0xFF8B5E00),
-                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF1B8354),
+                                fontWeight: FontWeight.w800,
                                 fontSize: 11,
                               ),
                             ),
@@ -875,14 +1018,40 @@ class _HomeShellState extends State<HomeShell> {
           return ListView(
             padding: const EdgeInsets.fromLTRB(18, 16, 18, 90),
             children: [
-              Text(
-                'My Quests (${currentHousehold?.name ?? "Guild"})',
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Bounties you have accepted in this household.',
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(
+                      Icons.menu_rounded,
+                      color: Color(0xFF1E293B),
+                      size: 26,
+                    ),
+                    onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'My Tasks (${currentHousehold?.name ?? "Apartment"})',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
+                        Text(
+                          'Bounties you have accepted in this household.',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 14),
               if (myClaimed.isEmpty)
@@ -953,303 +1122,24 @@ class _HomeShellState extends State<HomeShell> {
   // TAB 2: ROOMMATE LEADERBOARD (HALL OF FAME)
   // -------------------------------------------------------------
   Widget leaderboardView() {
-    return RefreshIndicator(
-      onRefresh: refresh,
-      color: primaryGreen,
-      child: FutureBuilder<List<LeaderboardEntry>>(
-        future: leaderboardFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(color: primaryGreen),
-            );
-          }
+    return FutureBuilder<List<LeaderboardEntry>>(
+      future: leaderboardFuture,
+      builder: (context, snapshot) {
+        final entries = snapshot.data ?? [];
+        final isLoading = snapshot.connectionState == ConnectionState.waiting;
+        final errorMessage = snapshot.hasError ? widget.bounties.error(snapshot.error!) : null;
 
-          final entries = snapshot.data ?? [];
-
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 90),
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 22,
-                ),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFFF0C8), Color(0xFFFFE082)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(22),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.amber.withValues(alpha: 0.2),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    const Icon(
-                      Icons.emoji_events_rounded,
-                      size: 54,
-                      color: Color(0xFFB47D00),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${currentHousehold?.name ?? "Household"} Standings',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF5D4017),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Compete with your roommates, finish quests & earn rewards.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Color(0xFF7A5900), fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              if (entries.isNotEmpty) ...[
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    if (entries.length > 1)
-                      _buildPodiumItem(
-                        entries[1],
-                        rank: 2,
-                        height: 110,
-                        medal: '🥈',
-                        color: const Color(0xFFC0C0C0),
-                      ),
-                    const SizedBox(width: 10),
-                    _buildPodiumItem(
-                      entries[0],
-                      rank: 1,
-                      height: 140,
-                      medal: '👑',
-                      color: const Color(0xFFFFD700),
-                    ),
-                    const SizedBox(width: 10),
-                    if (entries.length > 2)
-                      _buildPodiumItem(
-                        entries[2],
-                        rank: 3,
-                        height: 90,
-                        medal: '🥉',
-                        color: const Color(0xFFCD7F32),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-              ],
-
-              const Text(
-                'Roommate Rankings',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 10),
-              if (entries.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(32),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Center(
-                    child: Text('No leaderboard records for this household yet.'),
-                  ),
-                )
-              else
-                ...entries.map((entry) => _buildLeaderboardTile(entry)),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildPodiumItem(
-    LeaderboardEntry entry, {
-    required int rank,
-    required double height,
-    required String medal,
-    required Color color,
-  }) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(medal, style: const TextStyle(fontSize: 24)),
-          const SizedBox(height: 4),
-          CircleAvatar(
-            radius: rank == 1 ? 26 : 22,
-            backgroundColor: color.withValues(alpha: 0.3),
-            child: Text(
-              entry.name.isNotEmpty ? entry.name[0].toUpperCase() : '?',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: rank == 1 ? 18 : 15,
-                color: Colors.black87,
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            entry.name.split(' ').first,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            overflow: TextOverflow.ellipsis,
-          ),
-          Text(
-            '${entry.totalXp} XP',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-              color: primaryGreen,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Container(
-            height: height,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.25),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(12),
-              ),
-              border: Border.all(color: color.withValues(alpha: 0.6)),
-            ),
-            child: Center(
-              child: Text(
-                '#$rank',
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.black54,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLeaderboardTile(LeaderboardEntry entry) {
-    final isMe = entry.userId == widget.user.id;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: isMe ? const Color(0xFFE8F5E9) : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isMe ? primaryGreen : const Color(0xFFF0EAE0),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 28,
-            alignment: Alignment.center,
-            child: Text(
-              '#${entry.rank}',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                color: entry.rank <= 3 ? primaryGreen : Colors.grey,
-                fontSize: 14,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: primaryGreen.withValues(alpha: 0.15),
-            child: Text(
-              entry.name.isNotEmpty ? entry.name[0].toUpperCase() : '?',
-              style: const TextStyle(
-                fontWeight: FontWeight.w900,
-                color: primaryGreen,
-                fontSize: 14,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      entry.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    if (isMe) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: primaryGreen,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          'YOU',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                Text(
-                  '${entry.tier} • ${entry.completedCount} quests finished',
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '${entry.totalXp} XP',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFF8B5E00),
-                  fontSize: 13,
-                ),
-              ),
-              if (entry.totalRewardValue > 0)
-                Text(
-                  '\$${entry.totalRewardValue.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: primaryGreen,
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
+        return LeaderboardView(
+          currentUser: currentUser,
+          currentHousehold: currentHousehold,
+          leaderboard: entries,
+          isLoading: isLoading,
+          errorMessage: errorMessage,
+          onRefresh: refresh,
+          onBack: () => setState(() => tab = 0),
+          onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+        );
+      },
     );
   }
 
@@ -1260,7 +1150,28 @@ class _HomeShellState extends State<HomeShell> {
     return ListView(
       padding: const EdgeInsets.all(22),
       children: [
-        const SizedBox(height: 18),
+        Row(
+          children: [
+            IconButton(
+              icon: const Icon(
+                Icons.menu_rounded,
+                color: Color(0xFF1E293B),
+                size: 26,
+              ),
+              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'Profile',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF1E293B),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
         Center(
           child: Column(
             children: [
@@ -1490,360 +1401,22 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> openDetail(Bounty bounty) async {
-    final proofController = TextEditingController(
-      text: bounty.submissionProof ?? '',
-    );
-    final isAssignee =
-        bounty.assigneeId != null &&
-        bounty.assigneeId == widget.user.id.toString();
-    final isCreator =
-        bounty.creatorId.isNotEmpty &&
-        bounty.creatorId == widget.user.id.toString();
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    final updated = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BountyDetailScreen(
+          bounty: bounty,
+          currentUser: currentUser,
+          service: widget.bounties,
+          memberAvatars: Map<String, String>.from(_memberAvatars),
+          refreshOnOpen: true,
+          onRefresh: refresh,
+        ),
       ),
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                24,
-                24,
-                24,
-                24 + MediaQuery.of(sheetContext).viewInsets.bottom,
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: RpgTheme.getDifficultyColor(
-                              bounty.difficulty,
-                            ).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            bounty.difficulty.toUpperCase(),
-                            style: TextStyle(
-                              color: RpgTheme.getDifficultyColor(
-                                bounty.difficulty,
-                              ),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(
-                              0xFFFFD166,
-                            ).withValues(alpha: 0.25),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            '+${bounty.xpReward} XP',
-                            style: const TextStyle(
-                              color: Color(0xFF8B5E00),
-                              fontWeight: FontWeight.w900,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    Text(
-                      bounty.title,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    Text(
-                      bounty.description.isEmpty
-                          ? 'No special instructions.'
-                          : bounty.description,
-                      style: TextStyle(
-                        color: Colors.grey.shade700,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF9E6),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFFFFE082)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Text('🎁', style: TextStyle(fontSize: 24)),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Quest Reward',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 12,
-                                    color: Color(0xFF7A5900),
-                                  ),
-                                ),
-                                Text(
-                                  bounty.reward.isEmpty
-                                      ? 'Roommate Gratitude'
-                                      : bounty.reward,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (bounty.rewardValue != null &&
-                              bounty.rewardValue! > 0)
-                            Text(
-                              '\$${bounty.rewardValue!.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                                color: primaryGreen,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    if (bounty.isClaimed && isAssignee) ...[
-                      const Text(
-                        'Submission Note / Proof',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: proofController,
-                        maxLines: 2,
-                        decoration: const InputDecoration(
-                          hintText:
-                              'e.g. Wiped the counter, took recycling out',
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ] else if (bounty.submissionProof != null &&
-                        bounty.submissionProof!.isNotEmpty) ...[
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Proof Submitted:',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              bounty.submissionProof!,
-                              style: const TextStyle(fontSize: 13),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-
-                    if (bounty.isOpen && !isCreator)
-                      FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: primaryGreen,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        onPressed: () async {
-                          Navigator.pop(sheetContext);
-                          await handleClaim(bounty);
-                        },
-                        icon: const Icon(Icons.flash_on_rounded),
-                        label: const Text(
-                          'Accept Quest',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-
-                    if (bounty.isClaimed && isAssignee) ...[
-                      FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: primaryGreen,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        onPressed: () async {
-                          try {
-                            final proof = proofController.text.trim();
-                            await widget.bounties.submit(
-                              bounty.id,
-                              proof: proof.isEmpty ? 'Chore finished' : proof,
-                            );
-                            if (!context.mounted) return;
-                            Navigator.pop(sheetContext);
-                            await refresh();
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Submitted for roommate verification!',
-                                ),
-                              ),
-                            );
-                          } catch (e) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(widget.bounties.error(e))),
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.send_rounded),
-                        label: const Text(
-                          'Submit for Review',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextButton(
-                        onPressed: () async {
-                          try {
-                            await widget.bounties.unclaim(bounty.id);
-                            if (!context.mounted) return;
-                            Navigator.pop(sheetContext);
-                            await refresh();
-                          } catch (e) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(widget.bounties.error(e))),
-                            );
-                          }
-                        },
-                        child: const Text(
-                          'Abandon Quest',
-                          style: TextStyle(color: Colors.redAccent),
-                        ),
-                      ),
-                    ],
-
-                    if (bounty.isSubmitted && isCreator) ...[
-                      FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: primaryGreen,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        onPressed: () async {
-                          try {
-                            await widget.bounties.verify(bounty.id);
-                            if (!context.mounted) return;
-                            Navigator.pop(sheetContext);
-                            await refresh();
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Quest verified! XP & Reward disbursed.',
-                                ),
-                              ),
-                            );
-                          } catch (e) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(widget.bounties.error(e))),
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.verified_rounded),
-                        label: const Text(
-                          'Approve & Disburse Reward',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
-
-                    if (bounty.isOpen && isCreator)
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.redAccent),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        onPressed: () async {
-                          try {
-                            await widget.bounties.cancel(bounty.id);
-                            if (!context.mounted) return;
-                            Navigator.pop(sheetContext);
-                            await refresh();
-                          } catch (e) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(widget.bounties.error(e))),
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                        label: const Text(
-                          'Cancel This Bounty',
-                          style: TextStyle(color: Colors.redAccent),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
     );
+    if (updated == true && mounted) {
+      await refresh();
+    }
   }
 }
 

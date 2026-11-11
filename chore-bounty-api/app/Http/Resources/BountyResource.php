@@ -18,6 +18,7 @@ class BountyResource extends JsonResource
             'title' => $this->title,
             'description' => $this->description,
             'difficulty' => $this->difficulty,
+            'category' => $this->category,
             'xp_reward' => (int) ($this->xp_reward ?? 50),
             'reward_value' => $this->reward_value,
             'reward_description' => $this->reward_description,

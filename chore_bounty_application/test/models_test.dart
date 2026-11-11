@@ -19,8 +19,8 @@ void main() {
         'reward_value': 15.00,
         'reward_description': '1 Venti Oat Latte',
         'status': 'open',
-        'creator': {'name': 'Sarah Connor'},
-        'assignee': {'name': 'Alex Mercer'},
+        'creator': {'name': 'Sarah Connor', 'avatar': 'gal_1'},
+        'assignee': {'name': 'Alex Mercer', 'avatar': 'guy_2'},
       };
 
       final bounty = Bounty.fromJson(json);
@@ -32,8 +32,35 @@ void main() {
       expect(bounty.rewardValue, 15.00);
       expect(bounty.reward, '1 Venti Oat Latte');
       expect(bounty.creator, 'Sarah Connor');
+      expect(bounty.creatorAvatar, 'gal_1');
       expect(bounty.assignee, 'Alex Mercer');
+      expect(bounty.assigneeAvatar, 'guy_2');
       expect(bounty.isOpen, isTrue);
+    });
+
+    test('Falls back to claims user avatar when assignee object is omitted', () {
+      final json = {
+        'id': 15,
+        'household_id': 2,
+        'creator_id': 1,
+        'title': 'Do the laundry',
+        'status': 'claimed',
+        'creator': {'name': 'Sheldon Cooper', 'avatar_id': 'guy_1'},
+        'claims': [
+          {
+            'user_id': 2,
+            'status': 'active',
+            'user': {'id': 2, 'name': 'Leonard Hofstadter', 'avatar': 'guy_2'},
+          }
+        ],
+      };
+
+      final bounty = Bounty.fromJson(json);
+
+      expect(bounty.creatorAvatar, 'guy_1');
+      expect(bounty.assigneeId, '2');
+      expect(bounty.assignee, 'Leonard Hofstadter');
+      expect(bounty.assigneeAvatar, 'guy_2');
     });
   });
 
@@ -46,8 +73,9 @@ void main() {
         'avatar_url': null,
         'completed_bounties_count': 5,
         'active_bounties_count': 1,
+        'total_tokens': 750,
         'total_xp': 750,
-        'total_reward_value': 45.00,
+        'total_reward_value': 750.00,
         'tier': 'Chore Knight',
       };
 
@@ -57,9 +85,29 @@ void main() {
       expect(entry.userId, 3);
       expect(entry.name, 'Alex Mercer');
       expect(entry.completedCount, 5);
+      expect(entry.totalTokens, 750);
       expect(entry.totalXp, 750);
-      expect(entry.totalRewardValue, 45.00);
+      expect(entry.totalRewardValue, 750.00);
       expect(entry.tier, 'Chore Knight');
+    });
+
+    test('Correctly parses tokens earned from completed chores instead of experience', () {
+      final json = {
+        'rank': 2,
+        'user_id': 5,
+        'name': 'Leonard',
+        'completed_bounties_count': 3,
+        'active_bounties_count': 0,
+        'total_tokens': 100,
+        'total_reward_value': 100.0,
+        'tier': 'Household Novice',
+      };
+
+      final entry = LeaderboardEntry.fromJson(json);
+
+      expect(entry.rank, 2);
+      expect(entry.totalTokens, 100);
+      expect(entry.totalRewardValue, 100.0);
     });
   });
 

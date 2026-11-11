@@ -40,19 +40,16 @@ class StoreBountyRequest extends FormRequest
             $merge['difficulty'] = 'easy';
         }
 
-        // Support points as xp_reward or reward_value
-        if (! $this->has('xp_reward')) {
-            $difficulty = $this->input('difficulty') ?? ($merge['difficulty'] ?? 'easy');
-            $merge['xp_reward'] = match ($difficulty) {
-                'epic' => 500,
-                'hard' => 200,
-                'medium' => 100,
-                default => 50,
-            };
-        }
-
+        // Support tokens/points as reward_value
         if (! $this->has('reward_value') && $this->has('points')) {
             $merge['reward_value'] = (float) $this->input('points');
+        } elseif (! $this->has('reward_value')) {
+            $merge['reward_value'] = 50.0;
+        }
+
+        // Align xp_reward to reward_value for backward compatibility
+        if (! $this->has('xp_reward')) {
+            $merge['xp_reward'] = (int) ($merge['reward_value'] ?? 50);
         }
 
         if ($merge) {

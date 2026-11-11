@@ -172,7 +172,7 @@ class BountyActionController extends Controller
         });
 
         return response()->json([
-            'message' => 'Bounty approved! Reward and XP disbursed to assignee.',
+            'message' => 'Bounty approved! Tokens disbursed to assignee.',
             'data' => new BountyResource($bounty->fresh()->load(['creator', 'assignee', 'household'])),
         ]);
     }
@@ -218,7 +218,7 @@ class BountyActionController extends Controller
 
         return response()->json([
             'message' => 'Bounty cancelled.',
-            'data' => new BountyResource($bounty->fresh()->load(['creator', 'household'])),
+            'data' => new BountyResource($bounty->fresh()->load(['creator', 'assignee', 'household'])),
         ]);
     }
 }

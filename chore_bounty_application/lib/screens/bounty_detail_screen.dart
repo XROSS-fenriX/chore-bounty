@@ -1,0 +1,1080 @@
+import 'package:flutter/material.dart';
+import '../models/app_user.dart';
+import '../models/bounty.dart';
+import '../services/bounty_service.dart';
+import '../widgets/avatar/user_avatar_widget.dart';
+import '../widgets/bounty_form/bounty_category_icons.dart';
+import 'create_bounty_screen.dart';
+
+class BountyDetailScreen extends StatefulWidget {
+  const BountyDetailScreen({
+    super.key,
+    required this.bounty,
+    required this.currentUser,
+    required this.service,
+    this.memberAvatars = const {},
+    this.refreshOnOpen = false,
+    this.onRefresh,
+  });
+
+  final Bounty bounty;
+  final AppUser currentUser;
+  final BountyService service;
+  final Map<String, String> memberAvatars;
+  final bool refreshOnOpen;
+  final Future<void> Function()? onRefresh;
+
+  @override
+  State<BountyDetailScreen> createState() => _BountyDetailScreenState();
+}
+
+class _BountyDetailScreenState extends State<BountyDetailScreen> {
+  late TextEditingController _proofController;
+  late Bounty _bounty;
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _bounty = widget.bounty;
+    _proofController = TextEditingController(text: _bounty.submissionProof ?? '');
+    if (widget.refreshOnOpen) {
+      _loadFreshBounty();
+    }
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    if (widget.refreshOnOpen) {
+      _loadFreshBounty();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant BountyDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.bounty != widget.bounty) {
+      _bounty = widget.bounty;
+      _proofController.text = _bounty.submissionProof ?? '';
+      if (widget.refreshOnOpen) {
+        _loadFreshBounty();
+      }
+    }
+  }
+
+  Future<void> _loadFreshBounty() async {
+    if (_bounty.id.isEmpty) return;
+    try {
+      final fresh = await widget.service.show(_bounty.id);
+      if (!mounted) return;
+      setState(() {
+        _bounty = fresh;
+        if (_proofController.text.isEmpty &&
+            (fresh.submissionProof?.isNotEmpty ?? false)) {
+          _proofController.text = fresh.submissionProof!;
+        }
+      });
+    } catch (_) {
+      // Retain existing bounty details when refresh cannot complete.
+    }
+  }
+
+  @override
+  void dispose() {
+    _proofController.dispose();
+    super.dispose();
+  }
+
+  bool get _isAssignee =>
+      _bounty.assigneeId != null &&
+      _bounty.assigneeId == widget.currentUser.id.toString();
+
+  bool get _isCreator =>
+      _bounty.creatorId.isNotEmpty &&
+      _bounty.creatorId == widget.currentUser.id.toString();
+
+  String? _resolveAvatar({
+    required bool isCurrentUser,
+    required String? bountyAvatar,
+    required String? userId,
+  }) {
+    if (isCurrentUser && (widget.currentUser.avatar?.isNotEmpty ?? false)) {
+      return widget.currentUser.avatar;
+    }
+    if (bountyAvatar != null && bountyAvatar.isNotEmpty) {
+      return bountyAvatar;
+    }
+    if (userId != null && userId.isNotEmpty) {
+      final fromMap = widget.memberAvatars[userId];
+      if (fromMap != null && fromMap.isNotEmpty) {
+        return fromMap;
+      }
+    }
+    return null;
+  }
+
+  String get _formattedCategory {
+    return Bounty.inferCategory(
+      _bounty.category,
+      _bounty.title,
+      _bounty.description,
+    );
+  }
+
+  String _formatScheduleDate(DateTime? due) {
+    if (due == null) return 'No due date';
+
+    final now = DateTime.now();
+    final isToday =
+        due.year == now.year && due.month == now.month && due.day == now.day;
+    final tomorrow = now.add(const Duration(days: 1));
+    final isTomorrow = due.year == tomorrow.year &&
+        due.month == tomorrow.month &&
+        due.day == tomorrow.day;
+
+    final hour = due.hour % 12 == 0 ? 12 : due.hour % 12;
+    final period = due.hour >= 12 ? 'PM' : 'AM';
+    final minuteStr = due.minute.toString().padLeft(2, '0');
+    final timeStr = '$hour:$minuteStr $period';
+
+    if (isToday) return 'Due today, $timeStr';
+    if (isTomorrow) return 'Due tomorrow, $timeStr';
+
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final monthStr =
+        (due.month >= 1 && due.month <= 12) ? months[due.month - 1] : '';
+
+    if (due.isBefore(now)) {
+      return 'Past due ($monthStr ${due.day}, $timeStr)';
+    }
+
+    if (due.year == now.year) {
+      return 'Due $monthStr ${due.day}, $timeStr';
+    }
+
+    return 'Due $monthStr ${due.day}, ${due.year}, $timeStr';
+  }
+
+  String _formatTimeAgo(DateTime? date) {
+    if (date == null) return '';
+    final diff = DateTime.now().difference(date);
+    if (diff.isNegative || diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${(diff.inDays / 7).floor()}w ago';
+  }
+
+  Widget _buildClaimantSection() {
+    final rawAssigneeName = (_bounty.assignee != null &&
+            _bounty.assignee!.trim().isNotEmpty &&
+            _bounty.assignee!.toLowerCase() != 'you')
+        ? _bounty.assignee!.trim()
+        : (_isAssignee ? widget.currentUser.name : 'Roommate');
+    final assigneeDisplayName =
+        _isAssignee ? '$rawAssigneeName (You)' : rawAssigneeName;
+
+    final relevantTime = _bounty.isCompleted
+        ? (_bounty.completedAt ?? _bounty.submittedAt ?? _bounty.claimedAt)
+        : (_bounty.claimedAt ?? _bounty.submittedAt);
+    final timeAgo = _formatTimeAgo(relevantTime);
+
+    final proofText = _bounty.submissionProof?.trim() ?? '';
+    final showProof = proofText.isNotEmpty && !(_bounty.isClaimed && _isAssignee);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _bounty.isCompleted ? 'Completed by' : 'Claimed by',
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF0F172A),
+              letterSpacing: -0.2,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              UserAvatarWidget(
+                avatarId: _resolveAvatar(
+                  isCurrentUser: _isAssignee,
+                  bountyAvatar: _bounty.assigneeAvatar,
+                  userId: _bounty.assigneeId,
+                ),
+                userName: rawAssigneeName,
+                size: 40,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  assigneeDisplayName,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (timeAgo.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Text(
+                  timeAgo,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (showProof) ...[
+            const SizedBox(height: 14),
+            const Divider(
+              color: Color(0xFFE2E8F0),
+              height: 1,
+              thickness: 1,
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Proof Submitted',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF334155),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              proofText,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF475569),
+                height: 1.5,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge() {
+    String label;
+    Color bgColor;
+    Color textColor;
+    Color borderColor;
+
+    if (_bounty.isCancelled) {
+      label = 'Cancelled';
+      bgColor = const Color(0xFFFEF2F2);
+      textColor = const Color(0xFFDC2626);
+      borderColor = const Color(0xFFFCA5A5);
+    } else if (_bounty.isCompleted) {
+      label = 'Completed';
+      bgColor = const Color(0xFFDCFCE7);
+      textColor = const Color(0xFF15803D);
+      borderColor = const Color(0xFF86EFAC);
+    } else if (_bounty.isClaimed || _bounty.isSubmitted) {
+      label = 'Taken';
+      bgColor = const Color(0xFFFEF3C7);
+      textColor = const Color(0xFFB45309);
+      borderColor = const Color(0xFFFDE68A);
+    } else {
+      label = 'Available';
+      bgColor = const Color(0xFF1B8354);
+      textColor = Colors.white;
+      borderColor = const Color(0xFF1B8354);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor, width: 1),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: textColor,
+          letterSpacing: -0.1,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleClaim() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await widget.service.claim(_bounty.id);
+      if (widget.onRefresh != null) await widget.onRefresh!();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bounty claimed successfully!')),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = widget.service.error(e);
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _handleSubmit() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final proof = _proofController.text.trim();
+      await widget.service.submit(
+        _bounty.id,
+        proof: proof.isEmpty ? 'Chore finished' : proof,
+      );
+      if (widget.onRefresh != null) await widget.onRefresh!();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Submitted for roommate verification!')),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = widget.service.error(e);
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _handleAbandon() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await widget.service.unclaim(_bounty.id);
+      if (widget.onRefresh != null) await widget.onRefresh!();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bounty released.')),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = widget.service.error(e);
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _handleVerify() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await widget.service.verify(_bounty.id);
+      if (widget.onRefresh != null) await widget.onRefresh!();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bounty approved! Tokens disbursed.')),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = widget.service.error(e);
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _handleEdit() async {
+    final updated = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CreateBounty(
+          service: widget.service,
+          bountyToEdit: _bounty,
+        ),
+      ),
+    );
+
+    if (updated == true) {
+      if (widget.onRefresh != null) await widget.onRefresh!();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bounty updated successfully!')),
+      );
+      Navigator.pop(context, true);
+    }
+  }
+
+  Future<void> _handleCancel() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await widget.service.cancel(_bounty.id);
+      if (widget.onRefresh != null) await widget.onRefresh!();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bounty cancelled.')),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = widget.service.error(e);
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const primaryGreen = Color(0xFF1B8354);
+    const bgLight = Color(0xFFFAF8F5);
+
+    final tokenAmount = _bounty.points > 0
+        ? _bounty.points
+        : (_bounty.rewardValue?.toInt() ?? 50);
+
+    final posterName = (_bounty.creator.isNotEmpty && _bounty.creator.toLowerCase() != 'you')
+        ? _bounty.creator
+        : widget.currentUser.name;
+
+    return Scaffold(
+      backgroundColor: bgLight,
+      appBar: AppBar(
+        backgroundColor: bgLight,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.chevron_left_rounded,
+            color: Color(0xFF0F172A),
+            size: 32,
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Bounty Details',
+          style: TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF0F172A),
+            letterSpacing: -0.3,
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                children: [
+                  if (_errorMessage != null)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEE2E2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFCA5A5)),
+                      ),
+                      child: Text(
+                        _errorMessage!,
+                        style: const TextStyle(
+                          color: Color(0xFFB91C1C),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+
+                  // TOP SECTION: Left Square Image/Icon + Right Details
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Left: Category Icon Square Box
+                        Container(
+                          width: 96,
+                          height: 96,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: const Color(0xFFCBD5E1),
+                              width: 1.5,
+                            ),
+                          ),
+                          alignment: Alignment.center,
+                          child: CategoryIconWidget(
+                            category: _formattedCategory,
+                            size: 72,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+
+                        // Right: Title, Token Reward Amount, Poster
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Title & Status Badge
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      _bounty.title,
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF0F172A),
+                                        letterSpacing: -0.3,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _buildStatusBadge(),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+
+                              // Token Reward Amount Row
+                              Row(
+                                children: [
+                                  const BountyCoinWidget(size: 20),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      '$tokenAmount Tokens',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF0F172A),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+
+                              // User (Poster of the chore) Row
+                              Row(
+                                children: [
+                                  UserAvatarWidget(
+                                    avatarId: _resolveAvatar(
+                                      isCurrentUser: _isCreator,
+                                      bountyAvatar: _bounty.creatorAvatar,
+                                      userId: _bounty.creatorId,
+                                    ),
+                                    userName: posterName,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      posterName,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF334155),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // MIDDLE SECTION: Description Box
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: const Color(0xFFE2E8F0),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Description',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          _bounty.description.isEmpty
+                              ? 'No special instructions.'
+                              : _bounty.description,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF475569),
+                            height: 1.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // SUBMISSION INPUT SECTION (active claim by current user)
+                  if (_bounty.isClaimed && _isAssignee) ...[
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Submission Note / Proof',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _proofController,
+                            maxLines: 3,
+                            decoration: InputDecoration(
+                              hintText: 'e.g. Wiped the counter, took recycling out',
+                              hintStyle: const TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF94A3B8),
+                              ),
+                              filled: true,
+                              fillColor: const Color(0xFFF8FAFC),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: primaryGreen, width: 1.5),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                  ],
+
+                  // DETAILS SECTION: Schedule Due Date & Category
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: const Color(0xFFE2E8F0),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Details',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+
+                        // Row 1: Due Date with Calendar Icon
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.calendar_today_outlined,
+                              size: 18,
+                              color: Color(0xFF475569),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _formatScheduleDate(_bounty.dueAt),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF475569),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        // Row 2: Category with Tag Icon
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.local_offer_outlined,
+                              size: 18,
+                              color: Color(0xFF475569),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _formattedCategory,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF475569),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // CLAIMED / COMPLETED & PROOF SECTION
+                  if (_bounty.isClaimed || _bounty.isSubmitted || _bounty.isCompleted) ...[
+                    _buildClaimantSection(),
+                    const SizedBox(height: 18),
+                  ],
+                ],
+              ),
+            ),
+
+            // BOTTOM ACTION BUTTON SECTION
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              color: Colors.transparent,
+              child: _buildActionButton(primaryGreen),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton(Color primaryGreen) {
+    if (_isLoading) {
+      return Container(
+        height: 52,
+        alignment: Alignment.center,
+        child: CircularProgressIndicator(color: primaryGreen),
+      );
+    }
+
+    // 1. Open chore - not creator -> "Claim This Bounty"
+    if (_bounty.isOpen && !_isCreator) {
+      return SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: primaryGreen,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+          onPressed: _handleClaim,
+          child: const Text(
+            'Claim This Bounty',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+        ),
+      );
+    }
+
+    // 2. Open chore - creator -> "Edit Bounty" + "Cancel This Bounty"
+    if (_bounty.isOpen && _isCreator) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryGreen,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              onPressed: _handleEdit,
+              icon: const Icon(Icons.edit_outlined, size: 20),
+              label: const Text(
+                'Edit Bounty',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFDC2626),
+                backgroundColor: const Color(0xFFFEF2F2),
+                side: const BorderSide(color: Color(0xFFFCA5A5), width: 1.2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              onPressed: _handleCancel,
+              icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFDC2626)),
+              label: const Text(
+                'Cancel This Bounty',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // 3. Claimed chore - assignee -> "Submit for Review" + "Abandon Quest"
+    if (_bounty.isClaimed && _isAssignee) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryGreen,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              onPressed: _handleSubmit,
+              icon: const Icon(Icons.send_rounded, size: 20),
+              label: const Text(
+                'Submit for Review',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: _handleAbandon,
+            child: const Text(
+              'Abandon Quest',
+              style: TextStyle(
+                color: Color(0xFFEF4444),
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // 4. Submitted chore - creator -> "Approve & Disburse Reward"
+    if (_bounty.isSubmitted && _isCreator) {
+      return SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: primaryGreen,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+          onPressed: _handleVerify,
+          icon: const Icon(Icons.verified_rounded, size: 20),
+          label: const Text(
+            'Approve & Disburse Reward',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+        ),
+      );
+    }
+
+    // 5. Completed chore
+    if (_bounty.isCompleted) {
+      return Container(
+        height: 52,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: const Color(0xFFDCFCE7),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF86EFAC)),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.check_circle_rounded, color: Color(0xFF15803D), size: 22),
+            SizedBox(width: 8),
+            Text(
+              'Completed',
+              style: TextStyle(
+                color: Color(0xFF15803D),
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 6. Cancelled chore
+    if (_bounty.isCancelled) {
+      return Container(
+        height: 52,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF2F2),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFCA5A5)),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.cancel_outlined, color: Color(0xFFDC2626), size: 22),
+            SizedBox(width: 8),
+            Text(
+              'Cancelled',
+              style: TextStyle(
+                color: Color(0xFFDC2626),
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 7. Taken chore (claimed/submitted by another user or waiting review)
+    if (_bounty.isClaimed || _bounty.isSubmitted) {
+      return Container(
+        height: 52,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF3C7),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFDE68A)),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.hourglass_bottom_rounded, color: Color(0xFFB45309), size: 22),
+            SizedBox(width: 8),
+            Text(
+              'Taken',
+              style: TextStyle(
+                color: Color(0xFFB45309),
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Default: Other status
+    return Container(
+      height: 50,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        'Status: ${_bounty.status.toUpperCase()}',
+        style: const TextStyle(
+          color: Color(0xFF64748B),
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
+        ),
+      ),
+    );
+  }
+}

@@ -23,17 +23,17 @@ class DashboardFilterPills extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Material(
               color: isSelected ? const Color(0xFF1B8354) : Colors.transparent,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(22),
               child: InkWell(
                 onTap: () => onFilterChanged(f),
-                borderRadius: BorderRadius.circular(20),
-                splashColor: const Color(0xFF1B8354).withAlpha(40),
+                borderRadius: BorderRadius.circular(22),
+                splashColor: const Color(0xFF1B8354).withAlpha(30),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   height: 38,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(22),
                     color: isSelected ? const Color(0xFF1B8354) : Colors.transparent,
                   ),
                   child: Text(

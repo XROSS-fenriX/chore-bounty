@@ -29,6 +29,7 @@ class UserAvatarWidget extends StatelessWidget {
     Widget avatarImage = ClipOval(
       child: Image.asset(
         avatar.assetPath,
+        key: ValueKey(avatar.assetPath),
         width: size,
         height: size,
         fit: BoxFit.cover,

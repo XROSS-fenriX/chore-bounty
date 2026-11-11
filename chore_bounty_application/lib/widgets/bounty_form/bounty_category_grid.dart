@@ -73,9 +73,9 @@ class BountyCategoryGrid extends StatelessWidget {
             children: [
               CategoryIconWidget(
                 category: name,
-                size: 34,
+                size: 48,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
                 name,
                 style: TextStyle(

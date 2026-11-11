@@ -12,6 +12,39 @@ class UpdateBountyRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $merge = [];
+
+        // Support category input to map to difficulty
+        if (! $this->has('difficulty') && $this->has('category')) {
+            $cat = strtolower((string) $this->input('category'));
+            $merge['difficulty'] = match ($cat) {
+                'hard', 'epic' => 'hard',
+                'medium', 'moderate' => 'medium',
+                default => 'easy',
+            };
+        }
+
+        // Support points as reward_value
+        if (! $this->has('reward_value') && $this->has('points')) {
+            $merge['reward_value'] = (float) $this->input('points');
+        }
+
+        // Align xp_reward to reward_value
+        if ($this->has('points') && ! $this->has('xp_reward')) {
+            $merge['xp_reward'] = (int) $this->input('points');
+        }
+
+        if ($this->has('reward_value') && ! $this->has('reward_description')) {
+            $merge['reward_description'] = (int) $this->input('reward_value').' Tokens';
+        }
+
+        if ($merge) {
+            $this->merge($merge);
+        }
+    }
+
     public function rules(): array
     {
         return [
