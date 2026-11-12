@@ -10,30 +10,35 @@ class LeaderboardService
     /**
      * Fetch household leaderboard ranking with completed bounty count and accumulated tokens.
      */
-    public function getHouseholdLeaderboard(Household $household): Collection
+    public function getHouseholdLeaderboard(Household $household, ?string $period = 'all'): Collection
     {
+        $since = match ($period) {
+            'week' => now()->startOfWeek(),
+            'month' => now()->startOfMonth(),
+            default => null,
+        };
+
+        $completedScope = function ($query) use ($household, $since) {
+            $query->where('household_id', $household->id)
+                ->where('status', 'completed');
+            if ($since !== null) {
+                $query->where('completed_at', '>=', $since);
+            }
+        };
+
         return $household->members()
             ->withCount([
-                'assignedBounties as completed_bounties_count' => function ($query) use ($household) {
-                    $query->where('household_id', $household->id)
-                          ->where('status', 'completed');
-                },
+                'assignedBounties as completed_bounties_count' => $completedScope,
                 'assignedBounties as active_bounties_count' => function ($query) use ($household) {
                     $query->where('household_id', $household->id)
-                          ->whereIn('status', ['claimed', 'submitted', 'in_progress']);
-                }
+                        ->whereIn('status', ['claimed', 'submitted', 'in_progress']);
+                },
             ])
             ->withSum([
-                'assignedBounties as total_tokens_earned' => function ($query) use ($household) {
-                    $query->where('household_id', $household->id)
-                          ->where('status', 'completed');
-                }
+                'assignedBounties as total_tokens_earned' => $completedScope,
             ], 'reward_value')
             ->withSum([
-                'assignedBounties as fallback_xp_earned' => function ($query) use ($household) {
-                    $query->where('household_id', $household->id)
-                          ->where('status', 'completed');
-                }
+                'assignedBounties as fallback_xp_earned' => $completedScope,
             ], 'xp_reward')
             ->orderByDesc('total_tokens_earned')
             ->orderByDesc('completed_bounties_count')
@@ -47,7 +52,11 @@ class LeaderboardService
                 return [
                     'rank' => $index + 1,
                     'user_id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'middle_name' => $user->middle_name,
+                    'last_name' => $user->last_name,
                     'name' => $user->name,
+                    'gender' => $user->gender,
                     'avatar_url' => $user->avatar_url ?? $user->avatar,
                     'avatar' => $user->avatar,
                     'completed_bounties_count' => (int) $user->completed_bounties_count,

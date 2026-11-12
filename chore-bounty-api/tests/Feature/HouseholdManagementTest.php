@@ -56,6 +56,15 @@ class HouseholdManagementTest extends TestCase
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.name', 'Downtown Loft');
 
+        // Verify household members endpoint lists owner first, then members
+        $membersRes = $this->getJson("/api/households/{$household1Id}/members");
+        $membersRes->assertStatus(200)
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.role', 'owner')
+            ->assertJsonPath('data.0.user.name', 'Alice')
+            ->assertJsonPath('data.1.role', 'member')
+            ->assertJsonPath('data.1.user.name', 'Bob');
+
         // 5. User2 leaves Downtown Loft
         $leaveRes = $this->postJson("/api/households/{$household1Id}/leave");
         $leaveRes->assertStatus(200);

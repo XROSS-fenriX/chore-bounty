@@ -1,19 +1,28 @@
+import 'dart:ui';
 import 'package:dio/dio.dart';
 import 'token_storage.dart';
 
 class ApiClient {
-  ApiClient(this.storage, {String? customBaseUrl})
-    : dio = Dio(
-        BaseOptions(
-          baseUrl: customBaseUrl ?? 'http://10.0.2.2:8000/api',
-          connectTimeout: const Duration(seconds: 15),
-          receiveTimeout: const Duration(seconds: 15),
-          headers: const {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          },
-        ),
-      ) {
+  static const String defaultBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://10.0.2.2:8000/api',
+  );
+
+  ApiClient(
+    this.storage, {
+    String? customBaseUrl,
+    VoidCallback? onUnauthorized,
+  }) : dio = Dio(
+         BaseOptions(
+           baseUrl: customBaseUrl ?? defaultBaseUrl,
+           connectTimeout: const Duration(seconds: 15),
+           receiveTimeout: const Duration(seconds: 15),
+           headers: const {
+             'Accept': 'application/json',
+             'Content-Type': 'application/json',
+           },
+         ),
+       ) {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -28,6 +37,16 @@ class ApiClient {
           }
 
           handler.next(options);
+        },
+        onError: (error, handler) async {
+          final path = error.requestOptions.path;
+          final isAuthEndpoint =
+              path.contains('/auth/login') || path.contains('/auth/register');
+          if (error.response?.statusCode == 401 && !isAuthEndpoint) {
+            await storage.clear();
+            onUnauthorized?.call();
+          }
+          handler.next(error);
         },
       ),
     );

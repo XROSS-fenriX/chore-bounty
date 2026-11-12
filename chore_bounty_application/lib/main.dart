@@ -5,6 +5,7 @@ import 'services/auth_service.dart';
 import 'services/bounty_service.dart';
 import 'services/household_service.dart';
 import 'screens/auth_gate.dart';
+import 'screens/welcome_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,15 +15,38 @@ void main() {
 class ChoreBountyApp extends StatelessWidget {
   const ChoreBountyApp({super.key});
 
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
+
   @override
   Widget build(BuildContext context) {
     final storage = TokenStorage();
-    final api = ApiClient(storage);
-    final auth = AuthService(api, storage);
-    final bounties = BountyService(api);
-    final households = HouseholdService(api);
+    late final ApiClient api;
+    late final AuthService auth;
+    late final BountyService bounties;
+    late final HouseholdService households;
+
+    api = ApiClient(
+      storage,
+      onUnauthorized: () {
+        navigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => WelcomeScreen(
+              auth: auth,
+              bounties: bounties,
+              households: households,
+            ),
+          ),
+          (route) => false,
+        );
+      },
+    );
+    auth = AuthService(api, storage);
+    bounties = BountyService(api);
+    households = HouseholdService(api);
 
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'ChoreBounty',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

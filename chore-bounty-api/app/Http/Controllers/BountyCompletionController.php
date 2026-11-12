@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Http\Resources\BountyCompletionResource;
 use App\Models\BountyClaim;
 use App\Models\BountyCompletion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
 class BountyCompletionController extends Controller
@@ -73,10 +73,7 @@ class BountyCompletionController extends Controller
 
     public function show(BountyCompletion $bountyCompletion)
     {
-        // $this->authorize(
-        //     'view',
-        //     $bountyCompletion->claim->bounty->household
-        // );
+        Gate::authorize('view', $bountyCompletion->claim->bounty);
 
         return new BountyCompletionResource(
             $bountyCompletion->load([
@@ -92,10 +89,7 @@ class BountyCompletionController extends Controller
         Request $request,
         BountyCompletion $bountyCompletion
     ) {
-        // $this->authorize(
-        //     'review',
-        //     $bountyCompletion->claim->bounty
-        // );
+        Gate::authorize('verify', $bountyCompletion->claim->bounty);
 
         $validated = $request->validate([
             'status' => [

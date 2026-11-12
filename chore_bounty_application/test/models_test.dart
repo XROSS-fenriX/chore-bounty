@@ -1,6 +1,7 @@
 import 'package:chore_bounty_application/models/app_user.dart';
 import 'package:chore_bounty_application/models/bounty.dart';
 import 'package:chore_bounty_application/models/household.dart';
+import 'package:chore_bounty_application/models/household_member.dart';
 import 'package:chore_bounty_application/models/leaderboard_entry.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -61,6 +62,57 @@ void main() {
       expect(bounty.assigneeId, '2');
       expect(bounty.assignee, 'Leonard Hofstadter');
       expect(bounty.assigneeAvatar, 'guy_2');
+    });
+
+    test('Classifies overdue open bounties as Past Due and not Available', () {
+      final pastDueOpen = Bounty(
+        id: '1',
+        householdId: '1',
+        creatorId: '1',
+        creator: 'Sheldon',
+        title: 'Test',
+        status: 'open',
+        dueAt: DateTime.now().subtract(const Duration(minutes: 5)),
+      );
+      final futureOpen = Bounty(
+        id: '2',
+        householdId: '1',
+        creatorId: '1',
+        creator: 'Sheldon',
+        title: 'Future chore',
+        status: 'open',
+        dueAt: DateTime.now().add(const Duration(hours: 2)),
+      );
+      final noDueDateOpen = Bounty(
+        id: '3',
+        householdId: '1',
+        creatorId: '1',
+        creator: 'Sheldon',
+        title: 'Undated chore',
+        status: 'open',
+      );
+      final pastDueCompleted = Bounty(
+        id: '4',
+        householdId: '1',
+        creatorId: '1',
+        creator: 'Sheldon',
+        title: 'Done chore',
+        status: 'completed',
+        dueAt: DateTime.now().subtract(const Duration(days: 1)),
+      );
+
+      expect(pastDueOpen.isOpen, isTrue);
+      expect(pastDueOpen.isPastDue, isTrue);
+      expect(pastDueOpen.isAvailable, isFalse);
+
+      expect(futureOpen.isPastDue, isFalse);
+      expect(futureOpen.isAvailable, isTrue);
+
+      expect(noDueDateOpen.isPastDue, isFalse);
+      expect(noDueDateOpen.isAvailable, isTrue);
+
+      expect(pastDueCompleted.isPastDue, isFalse);
+      expect(pastDueCompleted.isAvailable, isFalse);
     });
   });
 
@@ -181,6 +233,100 @@ void main() {
       expect(user.id, 8);
       expect(user.hasHouseholds, isFalse);
       expect(user.households.isEmpty, isTrue);
+    });
+
+    test('Parses HouseholdMember and sorts owners before regular members', () {
+      final memberFirst = HouseholdMember.fromJson({
+        'user_id': 2,
+        'role': 'member',
+        'user': {
+          'id': 2,
+          'name': 'Leonard Hofstadter',
+          'email': 'leonard@gmail.com',
+          'avatar': 'guy_2',
+        },
+      });
+      final ownerSecond = HouseholdMember.fromJson({
+        'user_id': 1,
+        'role': 'owner',
+        'user': {
+          'id': 1,
+          'name': 'Sheldon Cooper',
+          'email': 'sheldon@gmail.com',
+          'avatar': 'guy_1',
+        },
+      });
+      final secondMember = HouseholdMember.fromJson({
+        'user_id': 3,
+        'role': 'member',
+        'user': {
+          'id': 3,
+          'name': 'Penny',
+          'email': 'penny@gmail.com',
+          'avatar': 'gal_1',
+        },
+      });
+
+      final sorted = HouseholdMember.sortOwnerFirst([
+        memberFirst,
+        ownerSecond,
+        secondMember,
+      ]);
+
+      expect(sorted.map((m) => m.name).toList(), [
+        'Sheldon Cooper',
+        'Leonard Hofstadter',
+        'Penny',
+      ]);
+      expect(sorted.first.isOwner, isTrue);
+      expect(sorted.last.isOwner, isFalse);
+    });
+
+    test('Parses structured first/middle/last name and gender fields across user models', () {
+      final appUser = AppUser.fromJson({
+        'id': 10,
+        'first_name': 'Leonard',
+        'middle_name': 'Leakey',
+        'last_name': 'Hofstadter',
+        'gender': 'male',
+        'email': 'leonard@example.com',
+      });
+      expect(appUser.firstName, 'Leonard');
+      expect(appUser.middleName, 'Leakey');
+      expect(appUser.lastName, 'Hofstadter');
+      expect(appUser.name, 'Leonard Leakey Hofstadter');
+      expect(appUser.gender, 'male');
+      expect(AppUser.formatGender(appUser.gender), 'Male');
+
+      final member = HouseholdMember.fromJson({
+        'user_id': 11,
+        'role': 'member',
+        'user': {
+          'id': 11,
+          'first_name': 'Amy',
+          'middle_name': 'Farrah',
+          'last_name': 'Fowler',
+          'gender': 'female',
+        },
+      });
+      expect(member.name, 'Amy Farrah Fowler');
+      expect(member.gender, 'female');
+
+      final entry = LeaderboardEntry.fromJson({
+        'rank': 1,
+        'user_id': 11,
+        'first_name': 'Amy',
+        'middle_name': 'Farrah',
+        'last_name': 'Fowler',
+        'gender': 'female',
+        'completed_bounties_count': 4,
+        'active_bounties_count': 0,
+        'total_tokens': 200,
+        'total_reward_value': 200.0,
+        'tier': 'Apprentice Sweeper',
+      });
+      expect(entry.name, 'Amy Farrah Fowler');
+      expect(entry.gender, 'female');
     });
   });
 }

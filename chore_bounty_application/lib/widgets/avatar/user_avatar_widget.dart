@@ -26,12 +26,15 @@ class UserAvatarWidget extends StatelessWidget {
     final avatar = AvatarConstants.findById(avatarId) ?? AvatarConstants.allAvatars.first;
     final effectiveBorderColor = borderColor ?? const Color(0xFF1B8354);
 
+    final decodeSize = (size * 3).ceil();
+
     Widget avatarImage = ClipOval(
       child: Image.asset(
         avatar.assetPath,
         key: ValueKey(avatar.assetPath),
         width: size,
         height: size,
+        cacheWidth: decodeSize,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) {
           // Fallback to initials or default profile

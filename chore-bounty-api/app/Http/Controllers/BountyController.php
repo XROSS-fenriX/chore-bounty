@@ -37,7 +37,9 @@ class BountyController extends Controller
             }
         }
 
-        return BountyResource::collection($query->paginate(20));
+        $perPage = min(max((int) $request->query('per_page', 100), 1), 200);
+
+        return BountyResource::collection($query->paginate($perPage));
     }
 
     public function store(StoreBountyRequest $request)

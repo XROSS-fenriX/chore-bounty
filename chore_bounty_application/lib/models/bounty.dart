@@ -1,3 +1,5 @@
+import 'app_user.dart';
+
 class Bounty {
   const Bounty({
     required this.id,
@@ -50,6 +52,9 @@ class Bounty {
   final DateTime? createdAt;
 
   bool get isOpen => status == 'open' || status == 'available';
+  bool get isPastDue =>
+      isOpen && dueAt != null && !dueAt!.isAfter(DateTime.now());
+  bool get isAvailable => isOpen && !isPastDue;
   bool get isClaimed => status == 'claimed' || status == 'in_progress';
   bool get isSubmitted => status == 'submitted';
   bool get isCompleted => status == 'completed';
@@ -105,6 +110,18 @@ class Bounty {
     return 'Other';
   }
 
+  static String _parseUserName(dynamic userObj, String? fallback) {
+    if (userObj is Map) {
+      return AppUser.composeFullName(
+        firstName: userObj['first_name']?.toString(),
+        middleName: userObj['middle_name']?.toString(),
+        lastName: userObj['last_name']?.toString(),
+        fallback: userObj['name']?.toString() ?? fallback,
+      );
+    }
+    return (fallback ?? '').trim();
+  }
+
   static String? _parseAvatar(dynamic userObj) {
     if (userObj is! Map) return null;
     final raw = (userObj['avatar'] ??
@@ -124,13 +141,13 @@ class Bounty {
         : (pointsInt > 0 ? pointsInt : 50);
 
     final c = j['creator'];
-    final creatorName = c is Map ? (c['name'] ?? '').toString() : (j['creator_name'] ?? '').toString();
+    final creatorName = _parseUserName(c, j['creator_name']?.toString());
     final creatorAvatar = _parseAvatar(c) ??
         (j['creator_avatar'] ?? j['creator_avatar_id'])?.toString().trim();
 
     final a = j['assignee'];
     var assigneeId = j['assignee_id']?.toString();
-    var assigneeName = a is Map ? (a['name'] ?? '').toString() : (j['assignee_name'] ?? '').toString();
+    var assigneeName = _parseUserName(a, j['assignee_name']?.toString());
     var assigneeAvatar = _parseAvatar(a) ??
         (j['assignee_avatar'] ?? j['assignee_avatar_id'])?.toString().trim();
 
@@ -165,7 +182,7 @@ class Bounty {
         }
         if (claimUser is Map) {
           if (assigneeName.isEmpty) {
-            assigneeName = (claimUser['name'] ?? '').toString();
+            assigneeName = _parseUserName(claimUser, null);
           }
           if (assigneeAvatar == null || assigneeAvatar.isEmpty) {
             assigneeAvatar = _parseAvatar(claimUser);

@@ -27,49 +27,49 @@ class LeaderboardPodiumSection extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        // 2nd Place (Silver)
+        // 2nd Place (Left, Medium Height)
         Expanded(
           child: second != null
               ? _buildPodiumColumn(
                   entry: second,
-                  rank: 2,
                   crownType: CrownColor.silver,
                   bgColor: const Color(0xFFF1F5F9),
                   borderColor: const Color(0xFFE2E8F0),
-                  avatarSize: 62.0,
-                  crownSize: 28.0,
+                  avatarSize: 58.0,
+                  crownSize: 26.0,
+                  minHeight: 168.0,
                   isCenter: false,
                 )
               : const SizedBox.shrink(),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
 
-        // 1st Place (Gold) - Center, Elevated & Taller
+        // 1st Place (Center, Tallest)
         Expanded(
           child: _buildPodiumColumn(
             entry: first,
-            rank: 1,
             crownType: CrownColor.gold,
             bgColor: const Color(0xFFFFFBEB),
             borderColor: const Color(0xFFFDE68A),
-            avatarSize: 74.0,
-            crownSize: 36.0,
+            avatarSize: 70.0,
+            crownSize: 32.0,
+            minHeight: 198.0,
             isCenter: true,
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
 
-        // 3rd Place (Bronze)
+        // 3rd Place (Right, Shortest)
         Expanded(
           child: third != null
               ? _buildPodiumColumn(
                   entry: third,
-                  rank: 3,
                   crownType: CrownColor.bronze,
                   bgColor: const Color(0xFFFFF7ED),
                   borderColor: const Color(0xFFFED7AA),
-                  avatarSize: 62.0,
-                  crownSize: 28.0,
+                  avatarSize: 52.0,
+                  crownSize: 24.0,
+                  minHeight: 142.0,
                   isCenter: false,
                 )
               : const SizedBox.shrink(),
@@ -80,98 +80,96 @@ class LeaderboardPodiumSection extends StatelessWidget {
 
   Widget _buildPodiumColumn({
     required LeaderboardEntry entry,
-    required int rank,
     required CrownColor crownType,
     required Color bgColor,
     required Color borderColor,
     required double avatarSize,
     required double crownSize,
+    required double minHeight,
     required bool isCenter,
   }) {
-    final score = entry.totalTokens;
+    final isMe = currentUserId != null && entry.userId == currentUserId;
+    final effectiveBorder = isMe ? const Color(0xFF1B8354) : borderColor;
 
-    return InkWell(
-      onTap: () => onUserTap?.call(entry),
-      borderRadius: BorderRadius.circular(22),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: EdgeInsets.fromLTRB(8, isCenter ? 12 : 16, 8, 14),
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: borderColor, width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: borderColor.withAlpha(isCenter ? 80 : 40),
-              blurRadius: isCenter ? 12 : 6,
-              offset: const Offset(0, 4),
+    return Material(
+      color: bgColor,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: () => onUserTap?.call(entry),
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          constraints: BoxConstraints(minHeight: minHeight),
+          padding: EdgeInsets.fromLTRB(8, isCenter ? 14 : 12, 8, 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: effectiveBorder,
+              width: isMe ? 1.8 : 1.3,
             ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Crown
-            CrownWidget(type: crownType, size: crownSize),
-            const SizedBox(height: 2),
-
-            // Avatar with Medal Badge
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                UserAvatarWidget(
-                  avatarId: entry.avatarUrl,
-                  userName: entry.name,
-                  size: avatarSize,
-                  borderColor: borderColor,
-                  borderWidth: isCenter ? 2.5 : 2.0,
-                ),
-                Positioned(
-                  right: -4,
-                  bottom: -4,
-                  child: RankMedalBadgeWidget(
-                    rank: rank,
-                    size: isCenter ? 24.0 : 20.0,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            // User Name
-            Text(
-              entry.name.split(' ').first,
-              style: TextStyle(
-                fontSize: isCenter ? 16 : 14,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF0F172A),
-                letterSpacing: -0.3,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(8),
+                blurRadius: isMe ? 8 : 4,
+                offset: const Offset(0, 2),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 4),
-
-            // Score with Coin Icon
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                BountyCoinWidget(size: isCenter ? 20 : 18),
-                const SizedBox(width: 4),
-                Text(
-                  '$score',
-                  style: TextStyle(
-                    fontSize: isCenter ? 16 : 14,
-                    fontWeight: FontWeight.w900,
-                    color: const Color(0xFF1E293B),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CrownWidget(type: crownType, size: crownSize),
+                  const SizedBox(height: 6),
+                  UserAvatarWidget(
+                    avatarId: entry.avatarUrl,
+                    userName: entry.name,
+                    size: avatarSize,
+                    borderColor: effectiveBorder,
+                    borderWidth: isCenter ? 2.5 : 2.0,
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+              const SizedBox(height: 10),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    entry.name.split(' ').first,
+                    style: TextStyle(
+                      fontSize: isCenter ? 15.5 : 13.5,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF0F172A),
+                      letterSpacing: -0.3,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      BountyCoinWidget(size: isCenter ? 18 : 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${entry.totalTokens}',
+                        style: TextStyle(
+                          fontSize: isCenter ? 15 : 13.5,
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF1E293B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
-

@@ -9,6 +9,7 @@ import '../services/auth_service.dart';
 import '../services/bounty_service.dart';
 import '../services/household_service.dart';
 import 'home_shell.dart';
+import 'login_screen.dart';
 
 class HouseholdPromptScreen extends StatefulWidget {
   const HouseholdPromptScreen({
@@ -134,12 +135,33 @@ class _HouseholdPromptScreenState extends State<HouseholdPromptScreen> {
     );
   }
 
+  Future<void> _handleBack() async {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+      return;
+    }
+
+    try {
+      await auth.logout();
+    } catch (_) {
+      // Proceed back to login screen even if server logout fails.
+    }
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LoginScreen(
+          auth: auth,
+          bounties: bounties,
+          households: households,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const bgColor = Color(0xFFFAF8F5);
-    final displayName = widget.user.name.trim().isNotEmpty
-        ? widget.user.name.trim().split(' ').first
-        : 'Roommate';
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark.copyWith(
@@ -152,8 +174,8 @@ class _HouseholdPromptScreenState extends State<HouseholdPromptScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 1. Full-width Hero Header (Occupies whole screen width; contains Top Bar and Welcome greeting)
-              _buildFullWidthHeader(context, displayName),
+              // 1. Full-width Hero Header (Occupies whole screen width; contains Top Bar)
+              _buildFullWidthHeader(context),
 
               // 2. Main content area with standard comfortable padding
               Padding(
@@ -232,7 +254,7 @@ class _HouseholdPromptScreenState extends State<HouseholdPromptScreen> {
     );
   }
 
-  Widget _buildFullWidthHeader(BuildContext context, String displayName) {
+  Widget _buildFullWidthHeader(BuildContext context) {
     final topPadding = MediaQuery.paddingOf(context).top;
 
     return SizedBox(
@@ -249,7 +271,7 @@ class _HouseholdPromptScreenState extends State<HouseholdPromptScreen> {
             ),
           ),
 
-          // Bottom white/cream blend gradient to make the title at the bottom fully visible and crisp
+          // Bottom white/cream blend gradient to transition cleanly into the page body
           Positioned(
             bottom: 0,
             left: 0,
@@ -281,52 +303,42 @@ class _HouseholdPromptScreenState extends State<HouseholdPromptScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Top Bar: Centered "Household Setup" Title
-                const SizedBox(
+                // Top Bar: Back button + Centered "Household Setup" Title
+                SizedBox(
                   height: 44,
-                  child: Center(
-                    child: Text(
-                      'Household Setup',
-                      style: TextStyle(
-                        color: Color(0xFF1E293B),
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.3,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: IconButton(
+                            icon: const Icon(
+                              Icons.chevron_left_rounded,
+                              color: Color(0xFF1E293B),
+                              size: 32,
+                            ),
+                            tooltip: 'Back',
+                            onPressed: _handleBack,
+                          ),
+                        ),
                       ),
-                    ),
+                      const Text(
+                        'Household Setup',
+                        style: TextStyle(
+                          color: Color(0xFF1E293B),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 
-                // Spacer allowing the cozy house illustration to remain fully visible in the center
-                const SizedBox(height: 110),
-
-                // Greeting Title with mint highlighter accent moved inside the header background
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Positioned(
-                      bottom: 2,
-                      child: Container(
-                        height: 8,
-                        width: 130,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF86EFAC).withAlpha(160),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ),
-                    Text(
-                      'Welcome, $displayName!',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 25,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF1E293B),
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                  ],
-                ),
+                // Spacer allowing the cozy house illustration to remain visible
+                const SizedBox(height: 132),
               ],
             ),
           ),

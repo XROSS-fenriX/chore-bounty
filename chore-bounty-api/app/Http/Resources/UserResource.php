@@ -11,8 +11,15 @@ class UserResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'first_name' => $this->first_name,
+            'middle_name' => $this->middle_name,
+            'last_name' => $this->last_name,
             'name' => $this->name,
-            'email' => $this->email,
+            'gender' => $this->gender,
+            'email' => $this->when(
+                ! $request->user() || $request->user()->id === $this->id,
+                $this->email
+            ),
             'avatar' => $this->avatar,
 
             'households' => HouseholdResource::collection(

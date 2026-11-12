@@ -31,20 +31,13 @@ class DashboardBountyCard extends StatelessWidget {
   }
 
   String _formatTimeLeft() {
-    final now = DateTime.now();
-    DateTime deadline;
-    if (bounty.dueAt != null) {
-      deadline = bounty.dueAt!;
-    } else if (bounty.createdAt != null) {
-      final cand = bounty.createdAt!.add(const Duration(days: 2));
-      deadline = cand.isAfter(now)
-          ? cand
-          : now.add(const Duration(days: 1, hours: 23, minutes: 59));
-    } else {
-      deadline = now.add(const Duration(days: 1, hours: 23, minutes: 59));
+    final due = bounty.dueAt;
+    if (due == null) {
+      return 'No due date';
     }
 
-    final diff = deadline.difference(now);
+    final now = DateTime.now();
+    final diff = due.difference(now);
     if (diff.isNegative || diff.inSeconds <= 0) {
       return '0 Seconds';
     }
@@ -116,29 +109,80 @@ class DashboardBountyCard extends StatelessWidget {
     );
   }
 
+  ({String label, IconData icon, Color bgColor, Color fgColor}) _chipSpec() {
+    if (bounty.isCompleted) {
+      return (
+        label: 'Completed',
+        icon: Icons.check_circle_rounded,
+        bgColor: const Color(0xFFDCFCE7),
+        fgColor: const Color(0xFF15803D),
+      );
+    }
+    if (bounty.isCancelled) {
+      return (
+        label: 'Cancelled',
+        icon: Icons.cancel_outlined,
+        bgColor: const Color(0xFFFEF2F2),
+        fgColor: const Color(0xFFDC2626),
+      );
+    }
+    if (bounty.isClaimed || bounty.isSubmitted) {
+      return (
+        label: 'Taken',
+        icon: Icons.hourglass_bottom_rounded,
+        bgColor: const Color(0xFFFEF3C7),
+        fgColor: const Color(0xFFB45309),
+      );
+    }
+    if (bounty.isPastDue) {
+      return (
+        label: 'Past Due',
+        icon: Icons.event_busy_rounded,
+        bgColor: const Color(0xFFFFF7ED),
+        fgColor: const Color(0xFFC2410C),
+      );
+    }
+    if (bounty.dueAt == null) {
+      return (
+        label: 'No due date',
+        icon: Icons.schedule_rounded,
+        bgColor: const Color(0xFFF1F5F9),
+        fgColor: const Color(0xFF475569),
+      );
+    }
+    return (
+      label: _formatTimeLeft(),
+      icon: Icons.access_time_rounded,
+      bgColor: const Color(0xFFEFF6FF),
+      fgColor: const Color(0xFF2563EB),
+    );
+  }
+
   Widget _buildTimeLeftChip() {
+    final spec = _chipSpec();
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
       decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
+        color: spec.bgColor,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.access_time_rounded,
+          Icon(
+            spec.icon,
             size: 11,
-            color: Color(0xFF2563EB),
+            color: spec.fgColor,
           ),
           const SizedBox(width: 3),
           Flexible(
             child: Text(
-              _formatTimeLeft(),
-              style: const TextStyle(
+              spec.label,
+              style: TextStyle(
                 fontSize: 9.5,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF2563EB),
+                color: spec.fgColor,
                 letterSpacing: -0.2,
               ),
               maxLines: 1,

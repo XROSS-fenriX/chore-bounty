@@ -15,16 +15,24 @@ class AuthService {
     return _parse(r.data);
   }
 
-  Future<AppUser> register(
-    String name,
-    String email,
-    String password,
-    String confirmation,
-  ) async {
+  Future<AppUser> register({
+    required String firstName,
+    String? middleName,
+    required String lastName,
+    required String gender,
+    required String email,
+    required String password,
+    required String confirmation,
+  }) async {
+    final trimmedMiddle = middleName?.trim();
     final r = await api.dio.post(
       '/auth/register',
       data: {
-        'name': name.trim(),
+        'first_name': firstName.trim(),
+        if (trimmedMiddle != null && trimmedMiddle.isNotEmpty)
+          'middle_name': trimmedMiddle,
+        'last_name': lastName.trim(),
+        'gender': gender,
         'email': email.trim(),
         'password': password,
         'password_confirmation': confirmation,
@@ -66,6 +74,41 @@ class AuthService {
       }
     }
     return user;
+  }
+
+  Future<AppUser> updateProfile({
+    required int userId,
+    required String firstName,
+    String? middleName,
+    required String lastName,
+    required String gender,
+    String? avatar,
+  }) async {
+    if (avatar != null && avatar.isNotEmpty) {
+      await storage.saveAvatar(avatar);
+    }
+    final trimmedMiddle = middleName?.trim();
+    final r = await api.dio.put(
+      '/users/$userId',
+      data: {
+        'first_name': firstName.trim(),
+        'middle_name':
+            (trimmedMiddle != null && trimmedMiddle.isNotEmpty)
+                ? trimmedMiddle
+                : null,
+        'last_name': lastName.trim(),
+        'gender': gender,
+        if (avatar != null && avatar.isNotEmpty) 'avatar': avatar,
+      },
+    );
+    if (r.data is Map) {
+      final j = Map<String, dynamic>.from(r.data as Map);
+      final u = j['user'] ?? j['data'] ?? j;
+      if (u is Map) {
+        return AppUser.fromJson(Map<String, dynamic>.from(u));
+      }
+    }
+    return me();
   }
 
   Future<AppUser> updateAvatar(String avatarId) async {

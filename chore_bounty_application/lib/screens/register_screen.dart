@@ -3,9 +3,11 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../core/api_client.dart';
 import '../core/token_storage.dart';
+import '../models/app_user.dart';
 import '../services/auth_service.dart';
 import '../services/bounty_service.dart';
 import '../services/household_service.dart';
+import '../widgets/ui.dart';
 import 'home_shell.dart';
 import 'household_prompt_screen.dart';
 import 'login_screen.dart';
@@ -29,10 +31,13 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final form = GlobalKey<FormState>();
 
-  final name = TextEditingController();
+  final firstName = TextEditingController();
+  final middleName = TextEditingController();
+  final lastName = TextEditingController();
   final email = TextEditingController();
   final pass = TextEditingController();
   final confirm = TextEditingController();
+  String? selectedGender;
 
   late final TokenStorage _storage = TokenStorage();
   late final ApiClient _api = ApiClient(_storage);
@@ -52,7 +57,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
-    name.dispose();
+    firstName.dispose();
+    middleName.dispose();
+    lastName.dispose();
     email.dispose();
     pass.dispose();
     confirm.dispose();
@@ -73,10 +80,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     try {
       final user = await auth.register(
-        name.text.trim(),
-        email.text.trim(),
-        pass.text,
-        confirm.text,
+        firstName: firstName.text.trim(),
+        middleName: middleName.text.trim(),
+        lastName: lastName.text.trim(),
+        gender: selectedGender!,
+        email: email.text.trim(),
+        password: pass.text,
+        confirmation: confirm.text,
       );
 
       if (!mounted) return;
@@ -261,18 +271,80 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 24),
 
-                          // Name field
+                          // First Name field
                           TextFormField(
-                            controller: name,
+                            controller: firstName,
                             textCapitalization: TextCapitalization.words,
                             decoration: _inputDecoration(
-                              labelText: 'Your Name',
+                              labelText: 'First Name',
                               prefixIcon: Icons.person_outline_rounded,
-                              hintText: 'e.g. Alex Mercer',
+                              hintText: 'e.g. Alex',
                             ),
                             validator: (v) {
                               if (v == null || v.trim().isEmpty) {
-                                return 'Please enter your name';
+                                return 'First name is required';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Middle Name (optional)
+                          TextFormField(
+                            controller: middleName,
+                            textCapitalization: TextCapitalization.words,
+                            decoration: _inputDecoration(
+                              labelText: 'Middle Name (Optional)',
+                              prefixIcon: Icons.person_outline_rounded,
+                              hintText: 'Optional',
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Last Name field
+                          TextFormField(
+                            controller: lastName,
+                            textCapitalization: TextCapitalization.words,
+                            decoration: _inputDecoration(
+                              labelText: 'Last Name',
+                              prefixIcon: Icons.badge_outlined,
+                              hintText: 'e.g. Mercer',
+                            ),
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) {
+                                return 'Last name is required';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Gender field
+                          DropdownButtonFormField<String>(
+                            initialValue: selectedGender,
+                            decoration: _inputDecoration(
+                              labelText: 'Gender',
+                              prefixIcon: Icons.wc_rounded,
+                              hintText: 'Select your gender',
+                            ),
+                            dropdownColor: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            items: AppUser.genderOptions
+                                .map(
+                                  (opt) => DropdownMenuItem<String>(
+                                    value: opt.value,
+                                    child: Text(opt.label),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: busy
+                                ? null
+                                : (value) {
+                                    setState(() => selectedGender = value);
+                                  },
+                            validator: (v) {
+                              if (v == null || v.isEmpty) {
+                                return 'Please select a gender';
                               }
                               return null;
                             },
@@ -481,20 +553,4 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
     );
   }
-}
-
-class TopCurveClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-    path.moveTo(0, 32);
-    path.quadraticBezierTo(size.width / 2, -12, size.width, 32);
-    path.lineTo(size.width, size.height);
-    path.lineTo(0, size.height);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }

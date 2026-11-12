@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Http\Resources\BountyClaimResource;
 use App\Models\Bounty;
 use App\Models\BountyClaim;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
 class BountyClaimController extends Controller
@@ -25,7 +25,7 @@ class BountyClaimController extends Controller
 
     public function store(Request $request, Bounty $bounty)
     {
-        // $this->authorize('view', $bounty->household);
+        Gate::authorize('claim', $bounty);
 
         $claim = DB::transaction(function () use ($request, $bounty) {
             $lockedBounty = Bounty::whereKey($bounty->id)
@@ -40,21 +40,17 @@ class BountyClaimController extends Controller
 
             $user = $request->user();
 
-            abort_unless(
-                $lockedBounty->household->members()
-                    ->where('users.id', $user->id)
-                    ->exists(),
-                403,
-                'You are not a member of this household.'
-            );
-
             $claim = $lockedBounty->claims()->create([
                 'user_id' => $user->id,
                 'status' => 'active',
                 'claimed_at' => now(),
             ]);
 
-            $lockedBounty->update(['status' => 'in_progress']);
+            $lockedBounty->update([
+                'assignee_id' => $user->id,
+                'claimed_at' => now(),
+                'status' => 'claimed',
+            ]);
 
             return $claim;
         });
@@ -66,7 +62,7 @@ class BountyClaimController extends Controller
 
     public function show(BountyClaim $bountyClaim)
     {
-        // $this->authorize('view', $bountyClaim->bounty->household);
+        Gate::authorize('view', $bountyClaim->bounty);
 
         return new BountyClaimResource(
             $bountyClaim->load(['bounty', 'user', 'completions'])
@@ -75,7 +71,7 @@ class BountyClaimController extends Controller
 
     public function destroy(BountyClaim $bountyClaim)
     {
-        // $this->authorize('release', $bountyClaim);
+        Gate::authorize('release', $bountyClaim->bounty);
 
         DB::transaction(function () use ($bountyClaim) {
             $claim = BountyClaim::whereKey($bountyClaim->id)
@@ -93,7 +89,11 @@ class BountyClaimController extends Controller
                 'released_at' => now(),
             ]);
 
-            $claim->bounty()->update(['status' => 'open']);
+            $claim->bounty()->update([
+                'assignee_id' => null,
+                'claimed_at' => null,
+                'status' => 'open',
+            ]);
         });
 
         return response()->noContent();

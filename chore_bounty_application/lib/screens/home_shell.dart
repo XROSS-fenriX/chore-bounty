@@ -1,27 +1,34 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import '../core/constants/rpg_theme.dart';
 import '../models/app_user.dart';
 import '../models/bounty.dart';
 import '../models/household.dart';
+import '../models/household_member.dart';
 import '../models/leaderboard_entry.dart';
 import '../services/auth_service.dart';
 import '../services/bounty_service.dart';
 import '../services/household_service.dart';
 import 'household_prompt_screen.dart';
+import 'household_view.dart';
+export 'household_view.dart';
 import 'login_screen.dart';
 import 'bounty_detail_screen.dart';
 export 'bounty_detail_screen.dart';
+import 'chores_view.dart';
+export 'chores_view.dart';
 import 'create_bounty_screen.dart';
 export 'create_bounty_screen.dart';
 import 'dashboard_view.dart';
 export 'dashboard_view.dart';
+import 'edit_profile_screen.dart';
+export 'edit_profile_screen.dart';
 import 'leaderboard_view.dart';
 export 'leaderboard_view.dart';
+import 'profile_view.dart';
+export 'profile_view.dart';
+import 'user_detail_screen.dart';
+export 'user_detail_screen.dart';
 import '../widgets/avatar/user_avatar_widget.dart';
-import '../widgets/avatar/avatar_picker_modal.dart';
-import '../widgets/bounty_form/bounty_category_icons.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({
@@ -47,12 +54,16 @@ class _HomeShellState extends State<HomeShell> {
   late AppUser currentUser;
   late Future<List<Bounty>> future;
   late Future<List<LeaderboardEntry>> leaderboardFuture;
+  late Future<List<HouseholdMember>> membersFuture;
   String filter = 'All';
 
   List<Household> myHouseholds = [];
   Household? currentHousehold;
   bool isHouseholdsLoading = false;
   final Map<String, String> _memberAvatars = {};
+  List<Bounty> _latestBounties = const [];
+  List<LeaderboardEntry> _latestLeaderboard = const [];
+  List<HouseholdMember> _latestMembers = const [];
 
   static const Color primaryGreen = Color(0xFF1B8354);
   static const Color bgLight = Color(0xFFFAF8F5);
@@ -66,6 +77,7 @@ class _HomeShellState extends State<HomeShell> {
     }
     future = widget.bounties.all();
     leaderboardFuture = widget.bounties.getLeaderboard();
+    membersFuture = Future.value(const <HouseholdMember>[]);
     _initHouseholds();
   }
 
@@ -77,10 +89,21 @@ class _HomeShellState extends State<HomeShell> {
 
   void _syncMemberAvatars(
     List<Bounty> bounties,
-    List<LeaderboardEntry> leaderboard,
-  ) {
+    List<LeaderboardEntry> leaderboard, {
+    List<HouseholdMember> members = const [],
+  }) {
+    _latestBounties = bounties;
+    _latestLeaderboard = leaderboard;
+    if (members.isNotEmpty) {
+      _latestMembers = members;
+    }
     if (currentUser.avatar != null && currentUser.avatar!.isNotEmpty) {
       _memberAvatars['${currentUser.id}'] = currentUser.avatar!;
+    }
+    for (final member in members) {
+      if (member.avatar != null && member.avatar!.isNotEmpty) {
+        _memberAvatars['${member.userId}'] = member.avatar!;
+      }
     }
     for (final entry in leaderboard) {
       if (entry.avatarUrl != null && entry.avatarUrl!.isNotEmpty) {
@@ -102,62 +125,41 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
-  Future<void> changeAvatar() async {
-    await AvatarPickerModal.show(
-      context: context,
-      currentAvatarId: currentUser.avatar,
-      onSave: (newAvatarId) async {
-        final previousAvatar = currentUser.avatar;
-        // Optimistic update across all active UI components
-        setState(() {
-          currentUser = currentUser.copyWith(avatar: newAvatarId);
-        });
-
-        try {
-          final updatedUser = await widget.auth.updateAvatar(newAvatarId);
-          if (mounted) {
-            setState(() {
-              currentUser = updatedUser;
-              if (updatedUser.avatar != null && updatedUser.avatar!.isNotEmpty) {
-                _memberAvatars['${updatedUser.id}'] = updatedUser.avatar!;
-              }
-            });
-            refresh();
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Row(
-                  children: [
-                    Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-                    SizedBox(width: 8),
-                    Text('Profile avatar updated successfully!'),
-                  ],
-                ),
-                backgroundColor: const Color(0xFF1B8354),
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            );
-          }
-        } catch (e) {
-          // Rollback on failure
-          if (mounted) {
-            setState(() {
-              currentUser = currentUser.copyWith(avatar: previousAvatar);
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Failed to update avatar: ${widget.auth.error(e)}'),
-                backgroundColor: Colors.redAccent,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            );
-          }
-          rethrow;
-        }
-      },
+  Future<void> openEditProfile() async {
+    final updatedUser = await Navigator.push<AppUser?>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditProfileScreen(
+          user: currentUser,
+          auth: widget.auth,
+        ),
+      ),
     );
+
+    if (updatedUser != null && mounted) {
+      setState(() {
+        currentUser = updatedUser;
+        if (updatedUser.avatar != null && updatedUser.avatar!.isNotEmpty) {
+          _memberAvatars['${updatedUser.id}'] = updatedUser.avatar!;
+        }
+      });
+      await refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+              SizedBox(width: 8),
+              Text('Profile updated successfully!'),
+            ],
+          ),
+          backgroundColor: const Color(0xFF1B8354),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
   }
 
   Future<void> _initHouseholds() async {
@@ -231,21 +233,35 @@ class _HomeShellState extends State<HomeShell> {
     );
   }
 
-  Future<void> refresh() async {
+  Future<void> refresh({bool showError = false}) async {
     final hId = currentHousehold?.id.toString();
+    final householdIntId = currentHousehold?.id;
     setState(() {
       future = widget.bounties.all(householdId: hId);
       leaderboardFuture = widget.bounties.getLeaderboard(householdId: hId);
+      membersFuture = householdIntId != null
+          ? widget.households.members(householdIntId)
+          : Future.value(const <HouseholdMember>[]);
     });
 
     try {
       final bounties = await future;
       final lb = await leaderboardFuture;
+      final members = await membersFuture;
       if (mounted) {
-        _syncMemberAvatars(bounties, lb);
+        setState(() {
+          _syncMemberAvatars(bounties, lb, members: members);
+        });
       }
-    } catch (_) {
-      // Handled by FutureBuilder
+    } catch (e) {
+      if (showError && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(widget.bounties.error(e)),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -309,6 +325,251 @@ class _HomeShellState extends State<HomeShell> {
     if (newHousehold != null && mounted) {
       await _initHouseholds();
       await switchHousehold(newHousehold);
+    }
+  }
+
+  void openNotificationsSheet() {
+    final uid = currentUser.id.toString();
+    final pendingApprovals = _latestBounties
+        .where((b) => b.creatorId == uid && b.isSubmitted)
+        .toList();
+    final ongoingTasks = _latestBounties
+        .where((b) => b.assigneeId == uid && b.isClaimed)
+        .toList();
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Notifications',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.pop(sheetContext),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                if (pendingApprovals.isEmpty && ongoingTasks.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 28,
+                      horizontal: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: const Column(
+                      children: [
+                        Icon(
+                          Icons.notifications_none_rounded,
+                          size: 34,
+                          color: Color(0xFF94A3B8),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'All caught up',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF334155),
+                          ),
+                        ),
+                        SizedBox(height: 3),
+                        Text(
+                          'No submitted bounties waiting for your review.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else ...[
+                  if (pendingApprovals.isNotEmpty) ...[
+                    const Text(
+                      'Awaiting Your Review',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...pendingApprovals.map(
+                      (b) => _buildNotificationBountyTile(
+                        sheetContext: sheetContext,
+                        bounty: b,
+                        badgeLabel: 'Review',
+                        badgeBg: const Color(0xFFFEF3C7),
+                        badgeFg: const Color(0xFFB45309),
+                        subtitle:
+                            'Submitted by ${(b.assignee != null && b.assignee!.isNotEmpty) ? b.assignee : 'Roommate'}',
+                      ),
+                    ),
+                  ],
+                  if (ongoingTasks.isNotEmpty) ...[
+                    if (pendingApprovals.isNotEmpty) const SizedBox(height: 12),
+                    const Text(
+                      'Your Ongoing Tasks',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...ongoingTasks.take(3).map(
+                      (b) => _buildNotificationBountyTile(
+                        sheetContext: sheetContext,
+                        bounty: b,
+                        badgeLabel: '${b.points > 0 ? b.points : 50} pts',
+                        badgeBg: const Color(0xFFDCFCE7),
+                        badgeFg: const Color(0xFF15803D),
+                        subtitle: 'Tap to submit completion proof',
+                      ),
+                    ),
+                  ],
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildNotificationBountyTile({
+    required BuildContext sheetContext,
+    required Bounty bounty,
+    required String badgeLabel,
+    required Color badgeBg,
+    required Color badgeFg,
+    required String subtitle,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: ListTile(
+        dense: true,
+        title: Text(
+          bounty.title,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF0F172A),
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          decoration: BoxDecoration(
+            color: badgeBg,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            badgeLabel,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              color: badgeFg,
+            ),
+          ),
+        ),
+        onTap: () {
+          Navigator.pop(sheetContext);
+          openDetail(bounty);
+        },
+      ),
+    );
+  }
+
+  Future<void> handleRenameHousehold(Household h, String newName) async {
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty || trimmed == h.name) return;
+    try {
+      final updated = await widget.households.update(h.id, trimmed);
+      if (!mounted) return;
+      setState(() {
+        myHouseholds = myHouseholds
+            .map((item) => item.id == h.id ? updated : item)
+            .toList();
+        if (currentHousehold?.id == h.id) {
+          currentHousehold = updated;
+        }
+      });
+      await refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Guild renamed to ${updated.name}'),
+          backgroundColor: primaryGreen,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.households.error(e))),
+      );
+    }
+  }
+
+  Future<void> handleRemoveMember(
+    Household h,
+    HouseholdMember member,
+  ) async {
+    try {
+      await widget.households.removeMember(h.id, member.userId);
+      if (!mounted) return;
+      await refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Removed ${member.name} from ${h.name}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.households.error(e))),
+      );
     }
   }
 
@@ -518,7 +779,13 @@ class _HomeShellState extends State<HomeShell> {
         bottom: false,
         child: IndexedStack(
           index: tab,
-          children: [questBoard(), myTasks(), leaderboardView(), profileView()],
+          children: [
+            questBoard(),
+            choresView(),
+            leaderboardView(),
+            householdView(),
+            profileView(),
+          ],
         ),
       ),
     );
@@ -527,14 +794,31 @@ class _HomeShellState extends State<HomeShell> {
   Widget _buildDrawer() {
     return Drawer(
       backgroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.horizontal(right: Radius.circular(24)),
+      ),
       child: SafeArea(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Navigation Items
+            // Navigation Items + Quick Actions
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                padding: const EdgeInsets.fromLTRB(14, 18, 14, 12),
                 children: [
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(10, 0, 10, 6),
+                    child: Text(
+                      'MENU',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.9,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                  ),
                   _buildDrawerNavItem(
                     icon: Icons.home_outlined,
                     activeIcon: Icons.home_rounded,
@@ -544,7 +828,7 @@ class _HomeShellState extends State<HomeShell> {
                   _buildDrawerNavItem(
                     icon: Icons.task_alt_outlined,
                     activeIcon: Icons.task_alt_rounded,
-                    label: 'My Tasks',
+                    label: 'Bounties',
                     index: 1,
                   ),
                   _buildDrawerNavItem(
@@ -554,113 +838,252 @@ class _HomeShellState extends State<HomeShell> {
                     index: 2,
                   ),
                   _buildDrawerNavItem(
+                    icon: Icons.holiday_village_outlined,
+                    activeIcon: Icons.holiday_village_rounded,
+                    label: 'Guild',
+                    index: 3,
+                  ),
+                  _buildDrawerNavItem(
                     icon: Icons.person_outline_rounded,
                     activeIcon: Icons.person_rounded,
                     label: 'Profile',
-                    index: 3,
+                    index: 4,
                   ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                    child: Divider(color: Color(0xFFE2E8F0), thickness: 1),
-                  ),
-                  ListTile(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    leading: const Icon(Icons.add_circle_outline_rounded, color: primaryGreen),
-                    title: const Text(
-                      'Post a Bounty',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                        color: Color(0xFF1E293B),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    height: 46,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: primaryGreen,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        create();
+                      },
+                      icon: const Icon(Icons.add_rounded, size: 20),
+                      label: const Text(
+                        'Post a Bounty',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14.5,
+                        ),
                       ),
                     ),
-                    onTap: () {
-                      Navigator.pop(context);
-                      create();
-                    },
                   ),
-                  ListTile(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    leading: const Icon(Icons.swap_horiz_rounded, color: Color(0xFF64748B)),
-                    title: const Text(
-                      'Switch Household',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                        color: Color(0xFF1E293B),
-                      ),
-                    ),
-                    onTap: () {
-                      Navigator.pop(context);
-                      openHouseholdSwitcher();
-                    },
-                  ),
+                  const SizedBox(height: 16),
+                  _buildDrawerHouseholdDropdown(),
                 ],
               ),
             ),
 
-            // User Profile Section (transferred to bottom)
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-              decoration: const BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: Color(0xFFF1F5F9), width: 1.5),
+            // User Profile Section (bottom card)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
+              child: Material(
+                color: const Color(0xFFFAF8F5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
                 ),
-              ),
-              child: InkWell(
-                onTap: () {
-                  Navigator.pop(context);
-                  setState(() => tab = 3);
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: Row(
-                  children: [
-                    UserAvatarWidget(
-                      avatarId: currentUser.avatar,
-                      userName: currentUser.name,
-                      size: 48,
-                      onTap: () {
-                        Navigator.pop(context);
-                        setState(() => tab = 3);
-                      },
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () {
+                    Navigator.pop(context);
+                    setState(() => tab = 4);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            currentUser.name,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF0F172A),
-                              letterSpacing: -0.3,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                    child: Row(
+                      children: [
+                        UserAvatarWidget(
+                          avatarId: currentUser.avatar,
+                          userName: currentUser.name,
+                          size: 44,
+                          onTap: () {
+                            Navigator.pop(context);
+                            setState(() => tab = 4);
+                          },
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                currentUser.name,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF0F172A),
+                                  letterSpacing: -0.2,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                currentUser.email,
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  color: Color(0xFF64748B),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 3),
-                          Text(
-                            currentUser.email,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Color(0xFF64748B),
-                              fontWeight: FontWeight.w500,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          color: Color(0xFF94A3B8),
+                          size: 20,
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDrawerHouseholdDropdown() {
+    const createOrJoinId = -1;
+    final selectedId = (currentHousehold != null &&
+            myHouseholds.any((h) => h.id == currentHousehold!.id))
+        ? currentHousehold!.id
+        : null;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAF8F5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.holiday_village_outlined,
+                size: 16,
+                color: Color(0xFF64748B),
+              ),
+              SizedBox(width: 6),
+              Text(
+                'Active Household',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            height: 42,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFFCBD5E1),
+                width: 1.1,
+              ),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: selectedId,
+                isExpanded: true,
+                hint: Text(
+                  currentHousehold?.name ?? 'Select household',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF64748B),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                dropdownColor: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Color(0xFF475569),
+                  size: 20,
+                ),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF0F172A),
+                ),
+                items: [
+                  ...myHouseholds.map(
+                    (h) => DropdownMenuItem<int>(
+                      value: h.id,
+                      child: Text(
+                        h.name,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  const DropdownMenuItem<int>(
+                    value: createOrJoinId,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.add_circle_outline_rounded,
+                          size: 17,
+                          color: primaryGreen,
+                        ),
+                        SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'Create or Join',
+                            style: TextStyle(
+                              color: primaryGreen,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  _scaffoldKey.currentState?.closeDrawer();
+                  if (value == createOrJoinId) {
+                    openAddHousehold();
+                    return;
+                  }
+                  final selected = myHouseholds.firstWhere((h) => h.id == value);
+                  switchHousehold(selected);
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -672,31 +1095,59 @@ class _HomeShellState extends State<HomeShell> {
     required int index,
   }) {
     final isSelected = tab == index;
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 2),
-      decoration: BoxDecoration(
-        color: isSelected ? primaryGreen.withValues(alpha: 0.12) : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        leading: Icon(
-          isSelected ? activeIcon : icon,
-          color: isSelected ? primaryGreen : const Color(0xFF64748B),
-          size: 24,
-        ),
-        title: Text(
-          label,
-          style: TextStyle(
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-            fontSize: 15,
-            color: isSelected ? primaryGreen : const Color(0xFF1E293B),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.5),
+      child: Material(
+        color: isSelected ? const Color(0xFFECFDF5) : Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(
+            color: isSelected
+                ? primaryGreen.withValues(alpha: 0.25)
+                : Colors.transparent,
+            width: 1.2,
           ),
         ),
-        onTap: () {
-          Navigator.pop(context);
-          setState(() => tab = index);
-        },
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () {
+            Navigator.pop(context);
+            setState(() => tab = index);
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            child: Row(
+              children: [
+                Icon(
+                  isSelected ? activeIcon : icon,
+                  color: isSelected ? primaryGreen : const Color(0xFF64748B),
+                  size: 22,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                      fontSize: 15,
+                      color:
+                          isSelected ? primaryGreen : const Color(0xFF1E293B),
+                    ),
+                  ),
+                ),
+                if (isSelected)
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: primaryGreen,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -724,12 +1175,12 @@ class _HomeShellState extends State<HomeShell> {
               leaderboard: leaderboardList,
               isLoading: isLoading,
               errorMessage: errorMessage,
-              onRefresh: refresh,
+              onRefresh: () => refresh(showError: true),
               onSelectBounty: openDetail,
               onCreateBounty: create,
               onHouseholdSwitch: openHouseholdSwitcher,
-              onNotificationTap: openHouseholdSwitcher,
-              onProfileTap: () => setState(() => tab = 3),
+              onNotificationTap: openNotificationsSheet,
+              onProfileTap: () => setState(() => tab = 4),
               onViewMyTasks: () => setState(() => tab = 1),
               onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
             );
@@ -740,381 +1191,30 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   // -------------------------------------------------------------
-  // QUEST CARD WIDGET
+  // TAB 1: CHORES (AVAILABLE, IN PROGRESS, COMPLETED, POSTED BY ME)
   // -------------------------------------------------------------
-  Widget questCard(Bounty bounty) {
-    final diffColor = RpgTheme.getDifficultyColor(bounty.difficulty);
-    final statusColor = RpgTheme.getStatusColor(bounty.status);
-    final statusLabel = RpgTheme.getStatusLabel(bounty.status);
+  Widget choresView() {
+    return FutureBuilder<List<Bounty>>(
+      future: future,
+      builder: (context, snapshot) {
+        final bountiesList = snapshot.data ?? [];
+        final isLoading = snapshot.connectionState == ConnectionState.waiting;
+        final errorMessage = snapshot.hasError
+            ? widget.bounties.error(snapshot.error!)
+            : null;
 
-    final isAssignee =
-        bounty.assigneeId != null &&
-        bounty.assigneeId == widget.user.id.toString();
-    final isCreator =
-        bounty.creatorId.isNotEmpty &&
-        bounty.creatorId == widget.user.id.toString();
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: bounty.isOpen
-              ? diffColor.withValues(alpha: 0.35)
-              : const Color(0xFFE5E7EB),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: InkWell(
-        onTap: () => openDetail(bounty),
-        borderRadius: BorderRadius.circular(18),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: diffColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: diffColor.withValues(alpha: 0.5),
-                      ),
-                    ),
-                    child: Text(
-                      bounty.difficulty.toUpperCase(),
-                      style: TextStyle(
-                        color: diffColor,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          statusLabel,
-                          style: TextStyle(
-                            color: statusColor,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1B8354).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Row(
-                          children: [
-                            const BountyCoinWidget(size: 14),
-                            const SizedBox(width: 4),
-                            Text(
-                              '+${bounty.points > 0 ? bounty.points : (bounty.rewardValue?.toInt() ?? 50)} Tokens',
-                              style: const TextStyle(
-                                color: Color(0xFF1B8354),
-                                fontWeight: FontWeight.w800,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-
-              Text(
-                bounty.title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.black87,
-                ),
-              ),
-              if (bounty.description.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  bounty.description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
-                ),
-              ],
-              const SizedBox(height: 10),
-
-              if (bounty.reward.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF9E6),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFFFE082)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Text('🎁', style: TextStyle(fontSize: 14)),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          bounty.reward,
-                          style: const TextStyle(
-                            color: Color(0xFF7A5900),
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (bounty.rewardValue != null &&
-                          bounty.rewardValue! > 0) ...[
-                        const SizedBox(width: 6),
-                        Text(
-                          '\$${bounty.rewardValue!.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            color: Color(0xFF1E8E4E),
-                            fontWeight: FontWeight.w900,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              const SizedBox(height: 12),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    bounty.isClaimed && bounty.assignee != null
-                        ? 'Claimed by ${isAssignee ? "You" : bounty.assignee}'
-                        : 'Posted by ${isCreator ? "You" : bounty.creator}',
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                  ),
-                  if (bounty.isOpen && !isCreator)
-                    ElevatedButton.icon(
-                      onPressed: () => handleClaim(bounty),
-                      icon: const Icon(Icons.flash_on_rounded, size: 14),
-                      label: const Text('Claim'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryGreen,
-                        foregroundColor: Colors.white,
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    )
-                  else if (bounty.isClaimed && isAssignee)
-                    ElevatedButton.icon(
-                      onPressed: () => openDetail(bounty),
-                      icon: const Icon(Icons.check_circle_outline, size: 14),
-                      label: const Text('Complete'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF3B82F6),
-                        foregroundColor: Colors.white,
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    )
-                  else if (bounty.isSubmitted && isCreator)
-                    ElevatedButton.icon(
-                      onPressed: () => openDetail(bounty),
-                      icon: const Icon(Icons.verified_rounded, size: 14),
-                      label: const Text('Verify'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFFB800),
-                        foregroundColor: Colors.black87,
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // -------------------------------------------------------------
-  // TAB 1: MY TASKS (ACTIVE ASSIGNED & CREATED BY ME)
-  // -------------------------------------------------------------
-  Widget myTasks() {
-    return RefreshIndicator(
-      onRefresh: refresh,
-      color: primaryGreen,
-      child: FutureBuilder<List<Bounty>>(
-        future: future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(color: primaryGreen),
-            );
-          }
-
-          final all = snapshot.data ?? [];
-          final myClaimed = all.where((b) {
-            return b.assigneeId != null &&
-                b.assigneeId == widget.user.id.toString();
-          }).toList();
-          final myCreated = all.where((b) {
-            return b.creatorId == widget.user.id.toString();
-          }).toList();
-
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 90),
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(
-                      Icons.menu_rounded,
-                      color: Color(0xFF1E293B),
-                      size: 26,
-                    ),
-                    onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'My Tasks (${currentHousehold?.name ?? "Apartment"})',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF1E293B),
-                          ),
-                        ),
-                        Text(
-                          'Bounties you have accepted in this household.',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              if (myClaimed.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(28),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    children: [
-                      const Icon(
-                        Icons.assignment_turned_in_outlined,
-                        size: 44,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'No Active Quests Claimed',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Browse the Quest Board and accept chores to earn rewards!',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                ...myClaimed.map((b) => questCard(b)),
-              const SizedBox(height: 24),
-              const Text(
-                'Bounties Posted By Me',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Manage chores you posted for roommates.',
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-              ),
-              const SizedBox(height: 14),
-              if (myCreated.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Center(
-                    child: Text('You have not posted any bounties yet.'),
-                  ),
-                )
-              else
-                ...myCreated.map((b) => questCard(b)),
-            ],
-          );
-        },
-      ),
+        return ChoresView(
+          user: currentUser,
+          currentHousehold: currentHousehold,
+          bounties: bountiesList,
+          isLoading: isLoading,
+          errorMessage: errorMessage,
+          onRefresh: () => refresh(showError: true),
+          onSelectBounty: openDetail,
+          onCreateBounty: create,
+          onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+        );
+      },
     );
   }
 
@@ -1126,6 +1226,9 @@ class _HomeShellState extends State<HomeShell> {
       future: leaderboardFuture,
       builder: (context, snapshot) {
         final entries = snapshot.data ?? [];
+        if (snapshot.hasData) {
+          _latestLeaderboard = entries;
+        }
         final isLoading = snapshot.connectionState == ConnectionState.waiting;
         final errorMessage = snapshot.hasError ? widget.bounties.error(snapshot.error!) : null;
 
@@ -1135,269 +1238,148 @@ class _HomeShellState extends State<HomeShell> {
           leaderboard: entries,
           isLoading: isLoading,
           errorMessage: errorMessage,
-          onRefresh: refresh,
-          onBack: () => setState(() => tab = 0),
+          onRefresh: () => refresh(showError: true),
           onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+          onUserTap: (entry) => openUserDetail(
+            userId: entry.userId,
+            name: entry.name,
+            avatarId: entry.avatarUrl,
+            leaderboardEntry: entry,
+          ),
         );
       },
     );
   }
 
   // -------------------------------------------------------------
-  // TAB 3: PROFILE & MULTI-HOUSEHOLD MANAGEMENT
+  // TAB 3: HOUSEHOLD MEMBERS
   // -------------------------------------------------------------
-  Widget profileView() {
-    return ListView(
-      padding: const EdgeInsets.all(22),
-      children: [
-        Row(
-          children: [
-            IconButton(
-              icon: const Icon(
-                Icons.menu_rounded,
-                color: Color(0xFF1E293B),
-                size: 26,
-              ),
-              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              'Profile',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                color: Color(0xFF1E293B),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Center(
-          child: Column(
-            children: [
-              UserAvatarWidget(
-                avatarId: currentUser.avatar,
-                userName: currentUser.name,
-                size: 92,
-                showEditBadge: true,
-                onTap: changeAvatar,
-              ),
-              const SizedBox(height: 8),
-              TextButton.icon(
-                onPressed: changeAvatar,
-                icon: const Icon(Icons.palette_outlined, size: 16),
-                label: const Text('Change Avatar'),
-                style: TextButton.styleFrom(
-                  foregroundColor: primaryGreen,
-                  textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-              ),
-            ],
+  Widget householdView() {
+    return FutureBuilder<List<HouseholdMember>>(
+      future: membersFuture,
+      builder: (context, snapshot) {
+        final membersList = snapshot.data ?? [];
+        if (snapshot.hasData) {
+          _latestMembers = membersList;
+        }
+        final isLoading = snapshot.connectionState == ConnectionState.waiting ||
+            isHouseholdsLoading;
+        final errorMessage = snapshot.hasError
+            ? widget.households.error(snapshot.error!)
+            : null;
+
+        return HouseholdView(
+          currentUser: currentUser,
+          currentHousehold: currentHousehold,
+          members: membersList,
+          leaderboard: _latestLeaderboard,
+          bounties: _latestBounties,
+          isLoading: isLoading,
+          errorMessage: errorMessage,
+          onRefresh: () => refresh(showError: true),
+          onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+          onMemberTap: (member) => openUserDetail(
+            userId: member.userId,
+            name: member.name,
+            avatarId: member.avatar,
+            member: member,
           ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          currentUser.name,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-        ),
-        Text(
-          currentUser.email,
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey.shade600),
-        ),
-        const SizedBox(height: 24),
-
-        // Households Management Section
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'My Households',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            TextButton.icon(
-              onPressed: openAddHousehold,
-              icon: const Icon(Icons.add_circle_outline, size: 16),
-              label: const Text('Add / Join'),
-              style: TextButton.styleFrom(foregroundColor: primaryGreen),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        ...myHouseholds.map((h) {
-          final isCurrent = currentHousehold?.id == h.id;
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isCurrent ? primaryGreen : const Color(0xFFF0EAE0),
-                width: isCurrent ? 2 : 1,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          h.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: h.isOwner
-                                ? Colors.amber.shade100
-                                : Colors.blue.shade50,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            h.role.toUpperCase(),
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w900,
-                              color: h.isOwner
-                                  ? Colors.amber.shade900
-                                  : Colors.blue.shade800,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (isCurrent)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: primaryGreen,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Text(
-                          'ACTIVE',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text(
-                      'Invite Code: ',
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                    ),
-                    SelectableText(
-                      h.inviteCode,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: primaryGreen,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.copy_rounded, size: 16),
-                      color: primaryGreen,
-                      tooltip: 'Copy Invite Code',
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: h.inviteCode));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Invite code "${h.inviteCode}" copied to clipboard!',
-                            ),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '${h.membersCount} roommates',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                    ),
-                    Row(
-                      children: [
-                        if (!isCurrent)
-                          TextButton(
-                            onPressed: () => switchHousehold(h),
-                            child: const Text(
-                              'Switch to this',
-                              style: TextStyle(color: primaryGreen, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        TextButton(
-                          onPressed: () => handleLeaveHousehold(h),
-                          child: const Text(
-                            'Leave',
-                            style: TextStyle(color: Colors.redAccent, fontSize: 12),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          );
-        }),
-
-        const SizedBox(height: 24),
-        OutlinedButton.icon(
-          onPressed: logout,
-          icon: const Icon(Icons.logout, color: Colors.redAccent),
-          label: const Text('Log out', style: TextStyle(color: Colors.redAccent)),
-          style: OutlinedButton.styleFrom(
-            side: const BorderSide(color: Colors.redAccent),
-            padding: const EdgeInsets.symmetric(vertical: 12),
-          ),
-        ),
-      ],
+          onRenameHousehold: handleRenameHousehold,
+          onRemoveMember: handleRemoveMember,
+        );
+      },
     );
   }
 
   // -------------------------------------------------------------
-  // ACTION HANDLERS & BOTTOM SHEET
+  // TAB 4: PROFILE & MULTI-HOUSEHOLD MANAGEMENT
   // -------------------------------------------------------------
-  Future<void> handleClaim(Bounty bounty) async {
-    try {
-      await widget.bounties.claim(bounty.id);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⚔️ Quest accepted! Good luck!')),
-      );
-      await refresh();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(widget.bounties.error(e))));
+  Widget profileView() {
+    final myEntry = _latestLeaderboard
+        .where((e) => e.userId == currentUser.id)
+        .firstOrNull;
+    final myMember = _latestMembers
+        .where((m) => m.userId == currentUser.id)
+        .firstOrNull;
+
+    return ProfileView(
+      currentUser: currentUser,
+      currentHousehold: currentHousehold,
+      myHouseholds: myHouseholds,
+      leaderboardEntry: myEntry,
+      member: myMember,
+      bounties: _latestBounties,
+      onRefresh: () => refresh(showError: true),
+      onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+      onEditProfile: openEditProfile,
+      onSelectBounty: openDetail,
+      onAddHousehold: openAddHousehold,
+      onSwitchHousehold: switchHousehold,
+      onLeaveHousehold: handleLeaveHousehold,
+      onLogout: logout,
+    );
+  }
+
+  // -------------------------------------------------------------
+  // ACTION HANDLERS & NAVIGATION
+  // -------------------------------------------------------------
+  Future<void> openUserDetail({
+    required int userId,
+    required String name,
+    String? avatarId,
+    LeaderboardEntry? leaderboardEntry,
+    HouseholdMember? member,
+  }) async {
+    if (userId == currentUser.id) {
+      final homeRoute = ModalRoute.of(context);
+      if (homeRoute != null && !homeRoute.isCurrent) {
+        Navigator.popUntil(context, (route) => route == homeRoute);
+      }
+      setState(() => tab = 4);
+      return;
     }
+
+    final matchedEntry = leaderboardEntry ??
+        _latestLeaderboard.where((e) => e.userId == userId).firstOrNull;
+    final matchedMember = member ??
+        _latestMembers.where((m) => m.userId == userId).firstOrNull;
+    final resolvedAvatar =
+        matchedMember?.avatar ?? matchedEntry?.avatarUrl ?? avatarId ?? _memberAvatars['$userId'];
+
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => UserDetailScreen(
+          currentUser: currentUser,
+          userId: userId,
+          name: matchedMember?.name ?? matchedEntry?.name ?? name,
+          avatarId: resolvedAvatar,
+          email: matchedMember?.email ?? '',
+          gender: matchedMember?.gender ?? matchedEntry?.gender,
+          role: matchedMember?.role,
+          joinedAt: matchedMember?.joinedAt,
+          rank: matchedEntry?.rank,
+          totalTokens: matchedEntry?.totalTokens ?? 0,
+          completedCount: matchedEntry?.completedCount ?? 0,
+          activeCount: matchedEntry?.activeCount ?? 0,
+          household: currentHousehold,
+          bounties: _latestBounties,
+          bountyService: widget.bounties,
+          memberAvatars: Map<String, String>.from(_memberAvatars),
+          onRefresh: refresh,
+          onUserTap: ({
+            required int userId,
+            required String name,
+            String? avatarId,
+          }) =>
+              openUserDetail(
+                userId: userId,
+                name: name,
+                avatarId: avatarId,
+              ),
+        ),
+      ),
+    );
   }
 
   Future<void> openDetail(Bounty bounty) async {
@@ -1411,6 +1393,16 @@ class _HomeShellState extends State<HomeShell> {
           memberAvatars: Map<String, String>.from(_memberAvatars),
           refreshOnOpen: true,
           onRefresh: refresh,
+          onUserTap: ({
+            required int userId,
+            required String name,
+            String? avatarId,
+          }) =>
+              openUserDetail(
+                userId: userId,
+                name: name,
+                avatarId: avatarId,
+              ),
         ),
       ),
     );

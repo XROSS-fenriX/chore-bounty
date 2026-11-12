@@ -21,7 +21,9 @@ class DatabaseSeeder extends Seeder
         $sarah = User::firstOrCreate(
             ['email' => 'sarah@example.com'],
             [
-                'name' => 'Sarah Connor',
+                'first_name' => 'Sarah',
+                'last_name' => 'Connor',
+                'gender' => 'female',
                 'password' => Hash::make('password'),
             ]
         );
@@ -29,7 +31,9 @@ class DatabaseSeeder extends Seeder
         $alex = User::firstOrCreate(
             ['email' => 'alex@example.com'],
             [
-                'name' => 'Alex Mercer',
+                'first_name' => 'Alex',
+                'last_name' => 'Mercer',
+                'gender' => 'male',
                 'password' => Hash::make('password'),
             ]
         );
@@ -37,7 +41,9 @@ class DatabaseSeeder extends Seeder
         $liam = User::firstOrCreate(
             ['email' => 'liam@example.com'],
             [
-                'name' => 'Liam Vance',
+                'first_name' => 'Liam',
+                'last_name' => 'Vance',
+                'gender' => 'male',
                 'password' => Hash::make('password'),
             ]
         );

@@ -63,13 +63,14 @@ class RewardRedemptionController extends Controller
             ->setStatusCode(201);
     }
 
-    public function show(RewardRedemption $rewardRedemption)
+    public function show(Request $request, RewardRedemption $rewardRedemption)
     {
-        // abort_unless(
-        //     $rewardRedemption->redeemed_by === auth()->id(),
-        //     403,
-        //     'You cannot access this redemption.'
-        // );
+        abort_unless(
+            $rewardRedemption->redeemed_by === $request->user()->id
+                || $rewardRedemption->completion?->claim?->bounty?->created_by === $request->user()->id,
+            403,
+            'You cannot access this redemption.'
+        );
 
         return new RewardRedemptionResource(
             $rewardRedemption->load('completion')
@@ -80,10 +81,11 @@ class RewardRedemptionController extends Controller
         Request $request,
         RewardRedemption $rewardRedemption
     ) {
-        // $this->authorize(
-        //     'redeem',
-        //     $rewardRedemption->completion->claim->bounty
-        // );
+        abort_unless(
+            $rewardRedemption->redeemed_by === $request->user()->id,
+            403,
+            'Only the earner can redeem this reward.'
+        );
 
         abort_unless(
             $rewardRedemption->status === 'unredeemed',

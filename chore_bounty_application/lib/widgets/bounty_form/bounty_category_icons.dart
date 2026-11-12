@@ -43,17 +43,12 @@ class CategoryIconWidget extends StatelessWidget {
       height: size,
       child: Image.asset(
         'assets/images/icons/clean_icon.png',
+        cacheWidth: (size * 3).ceil(),
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) {
-          return Image.asset(
-            'assets/images/broom_stick.png',
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) {
-              return CustomPaint(
-                size: Size(size, size),
-                painter: _BroomPainter(),
-              );
-            },
+          return CustomPaint(
+            size: Size(size, size),
+            painter: _BroomPainter(),
           );
         },
       ),
@@ -66,17 +61,12 @@ class CategoryIconWidget extends StatelessWidget {
       height: size,
       child: Image.asset(
         'assets/images/icons/laundry_icon.png',
+        cacheWidth: (size * 3).ceil(),
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) {
-          return Image.asset(
-            'assets/images/washing_machine.png',
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) {
-              return CustomPaint(
-                size: Size(size, size),
-                painter: _WashingMachinePainter(),
-              );
-            },
+          return CustomPaint(
+            size: Size(size, size),
+            painter: _WashingMachinePainter(),
           );
         },
       ),
@@ -89,6 +79,7 @@ class CategoryIconWidget extends StatelessWidget {
       height: size,
       child: Image.asset(
         'assets/images/icons/dishes_icon.png',
+        cacheWidth: (size * 3).ceil(),
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) {
           return CustomPaint(
@@ -106,6 +97,7 @@ class CategoryIconWidget extends StatelessWidget {
       height: size,
       child: Image.asset(
         'assets/images/icons/shopping_icon.png',
+        cacheWidth: (size * 3).ceil(),
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) {
           return CustomPaint(
@@ -123,6 +115,7 @@ class CategoryIconWidget extends StatelessWidget {
       height: size,
       child: Image.asset(
         'assets/images/icons/maintenance_icon.png',
+        cacheWidth: (size * 3).ceil(),
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) {
           return CustomPaint(
@@ -140,15 +133,10 @@ class CategoryIconWidget extends StatelessWidget {
       height: size,
       child: Image.asset(
         'assets/images/icons/trash_bin_icon.png',
+        cacheWidth: (size * 3).ceil(),
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) {
-          return Image.asset(
-            'assets/images/trash_bin.png',
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) {
-              return const SizedBox();
-            },
-          );
+          return const SizedBox();
         },
       ),
     );
@@ -160,29 +148,24 @@ class CategoryIconWidget extends StatelessWidget {
       height: size,
       child: Image.asset(
         'assets/images/icons/miscellaneous_icon.png',
+        cacheWidth: (size * 3).ceil(),
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) {
-          return Image.asset(
-            'assets/images/icons/miscellaneous-icon.png',
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) {
-              return Container(
-                width: size * 0.75,
-                height: size * 0.75,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFFF1F5F9),
-                  border: Border.all(color: const Color(0xFF94A3B8), width: 1.5),
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.more_horiz_rounded,
-                    color: Color(0xFF475569),
-                    size: 18,
-                  ),
-                ),
-              );
-            },
+          return Container(
+            width: size * 0.75,
+            height: size * 0.75,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFFF1F5F9),
+              border: Border.all(color: const Color(0xFF94A3B8), width: 1.5),
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.more_horiz_rounded,
+                color: Color(0xFF475569),
+                size: 18,
+              ),
+            ),
           );
         },
       ),
@@ -206,44 +189,39 @@ class BountyCoinWidget extends StatelessWidget {
       height: size,
       child: Image.asset(
         'assets/images/icons/coin_icon.png',
+        cacheWidth: (size * 3).ceil(),
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) {
-          return Image.asset(
-            'assets/images/coin.png',
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) {
-              return Container(
-                width: size,
-                height: size,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFBBF24), Color(0xFFF59E0B), Color(0xFFD97706)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFF59E0B).withAlpha(70),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                  border: Border.all(color: const Color(0xFFFDE68A), width: 1.5),
+          return Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFBBF24), Color(0xFFF59E0B), Color(0xFFD97706)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFF59E0B).withAlpha(70),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
                 ),
-                child: const Center(
-                  child: Text(
-                    '¢',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 16,
-                      height: 1.1,
-                    ),
-                  ),
+              ],
+              border: Border.all(color: const Color(0xFFFDE68A), width: 1.5),
+            ),
+            child: const Center(
+              child: Text(
+                '¢',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                  height: 1.1,
                 ),
-              );
-            },
+              ),
+            ),
           );
         },
       ),

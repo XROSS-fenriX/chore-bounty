@@ -6,6 +6,7 @@ import '../core/token_storage.dart';
 import '../services/auth_service.dart';
 import '../services/bounty_service.dart';
 import '../services/household_service.dart';
+import '../widgets/ui.dart';
 import 'login_screen.dart';
 import 'register_screen.dart';
 
@@ -196,20 +197,4 @@ class WelcomeScreen extends StatelessWidget {
       ),
     );
   }
-}
-
-class TopCurveClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-    path.moveTo(0, 32);
-    path.quadraticBezierTo(size.width / 2, -12, size.width, 32);
-    path.lineTo(size.width, size.height);
-    path.lineTo(0, size.height);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }

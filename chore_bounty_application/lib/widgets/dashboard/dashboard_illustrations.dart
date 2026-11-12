@@ -344,17 +344,12 @@ class TrashBinWidget extends StatelessWidget {
       height: size,
       child: Image.asset(
         'assets/images/icons/trash_bin_icon.png',
+        cacheWidth: (size * 3).ceil(),
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) {
-          return Image.asset(
-            'assets/images/trash_bin.png',
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) {
-              return CustomPaint(
-                size: Size(size, size),
-                painter: _TrashCanPainter(),
-              );
-            },
+          return CustomPaint(
+            size: Size(size, size),
+            painter: _TrashCanPainter(),
           );
         },
       ),

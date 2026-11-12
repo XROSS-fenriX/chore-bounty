@@ -113,8 +113,6 @@ class BountyActionController extends Controller
 
         DB::transaction(function () use ($user, $bounty) {
             $lockedBounty = Bounty::whereKey($bounty->id)->lockForUpdate()->firstOrFail();
-
-            // If creator completes/verifies or assignee directly completes
             $assigneeId = $lockedBounty->assignee_id ?? $user->id;
 
             $lockedBounty->update([
@@ -123,18 +121,7 @@ class BountyActionController extends Controller
                 'completed_at' => now(),
             ]);
 
-            $activeClaim = $lockedBounty->claims()->where('status', 'active')->first();
-            if ($activeClaim) {
-                $activeClaim->update(['status' => 'completed']);
-                $completion = $activeClaim->completions()->where('status', 'pending')->first();
-                if ($completion) {
-                    $completion->update([
-                        'status' => 'approved',
-                        'reviewed_by' => $user->id,
-                        'reviewed_at' => now(),
-                    ]);
-                }
-            }
+            $this->finalizeCompletion($lockedBounty, $user->id);
         });
 
         return response()->json([
@@ -157,24 +144,41 @@ class BountyActionController extends Controller
                 'completed_at' => now(),
             ]);
 
-            $activeClaim = $lockedBounty->claims()->where('status', 'active')->first();
-            if ($activeClaim) {
-                $activeClaim->update(['status' => 'completed']);
-                $completion = $activeClaim->completions()->where('status', 'pending')->first();
-                if ($completion) {
-                    $completion->update([
-                        'status' => 'approved',
-                        'reviewed_by' => $user->id,
-                        'reviewed_at' => now(),
-                    ]);
-                }
-            }
+            $this->finalizeCompletion($lockedBounty, $user->id);
         });
 
         return response()->json([
             'message' => 'Bounty approved! Tokens disbursed to assignee.',
             'data' => new BountyResource($bounty->fresh()->load(['creator', 'assignee', 'household'])),
         ]);
+    }
+
+    private function finalizeCompletion(Bounty $lockedBounty, int $reviewerId): void
+    {
+        $activeClaim = $lockedBounty->claims()->where('status', 'active')->first();
+        if (! $activeClaim) {
+            return;
+        }
+
+        $activeClaim->update(['status' => 'completed']);
+        $completion = $activeClaim->completions()->where('status', 'pending')->first();
+        if (! $completion) {
+            return;
+        }
+
+        $completion->update([
+            'status' => 'approved',
+            'reviewed_by' => $reviewerId,
+            'reviewed_at' => now(),
+        ]);
+
+        $completion->redemption()->firstOrCreate(
+            ['bounty_completion_id' => $completion->id],
+            [
+                'redeemed_by' => $activeClaim->user_id,
+                'status' => 'unredeemed',
+            ]
+        );
     }
 
     public function reject(ReviewBountyRequest $request, Bounty $bounty): JsonResponse

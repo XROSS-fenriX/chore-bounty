@@ -16,8 +16,12 @@ class BountyService {
         .toList();
   }
 
-  Future<List<Bounty>> all({String? status, String? householdId}) async {
-    final query = <String, dynamic>{};
+  Future<List<Bounty>> all({
+    String? status,
+    String? householdId,
+    int perPage = 100,
+  }) async {
+    final query = <String, dynamic>{'per_page': perPage};
     if (status != null && status.isNotEmpty) query['status'] = status;
     if (householdId != null && householdId.isNotEmpty) {
       query['household_id'] = householdId;
@@ -70,16 +74,35 @@ class BountyService {
     });
   }
 
+  Future<void> reject(String id, {String? feedback}) async {
+    await api.dio.post('/bounties/$id/reject', data: {
+      if (feedback != null && feedback.trim().isNotEmpty)
+        'feedback': feedback.trim(),
+    });
+  }
+
   Future<void> cancel(String id) async {
     await api.dio.post('/bounties/$id/cancel');
   }
 
-  Future<List<LeaderboardEntry>> getLeaderboard({String? householdId}) async {
+  Future<void> delete(String id) async {
+    await api.dio.delete('/bounties/$id');
+  }
+
+  Future<List<LeaderboardEntry>> getLeaderboard({
+    String? householdId,
+    String? period,
+  }) async {
     final endpoint = householdId != null && householdId.isNotEmpty
         ? '/households/$householdId/leaderboard'
         : '/leaderboard';
 
-    final res = await api.dio.get(endpoint);
+    final res = await api.dio.get(
+      endpoint,
+      queryParameters: period != null && period.isNotEmpty
+          ? {'period': period}
+          : null,
+    );
     final data = res.data is Map ? (res.data['data'] ?? []) : [];
     if (data is! List) return [];
 

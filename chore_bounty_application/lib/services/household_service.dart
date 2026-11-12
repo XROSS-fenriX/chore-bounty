@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import '../core/api_client.dart';
 import '../models/household.dart';
+import '../models/household_member.dart';
 
 class HouseholdService {
   HouseholdService(this.api);
@@ -20,6 +21,18 @@ class HouseholdService {
     return _list(res.data);
   }
 
+  Future<List<HouseholdMember>> members(int householdId) async {
+    final res = await api.dio.get('/households/$householdId/members');
+    dynamic d = res.data;
+    if (d is Map) d = d['data'] ?? d['members'] ?? [];
+    if (d is! List) return [];
+    final list = d
+        .whereType<Map>()
+        .map((x) => HouseholdMember.fromJson(Map<String, dynamic>.from(x)))
+        .toList();
+    return HouseholdMember.sortOwnerFirst(list);
+  }
+
   Future<Household> create(String name) async {
     final res = await api.dio.post('/households', data: {'name': name});
     final data = res.data is Map ? (res.data['data'] ?? res.data) : {};
@@ -36,6 +49,10 @@ class HouseholdService {
 
   Future<void> leave(int householdId) async {
     await api.dio.post('/households/$householdId/leave');
+  }
+
+  Future<void> removeMember(int householdId, int userId) async {
+    await api.dio.delete('/households/$householdId/members/$userId');
   }
 
   Future<Household> update(int householdId, String name) async {

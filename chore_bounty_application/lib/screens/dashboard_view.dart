@@ -3,7 +3,7 @@ import '../models/app_user.dart';
 import '../models/bounty.dart';
 import '../models/household.dart';
 import '../models/leaderboard_entry.dart';
-import '../widgets/dashboard/dashboard_bounty_card.dart';
+import '../widgets/dashboard/dashboard_chore_list.dart';
 import '../widgets/dashboard/dashboard_filter_pills.dart';
 import '../widgets/dashboard/dashboard_header.dart';
 import '../widgets/dashboard/dashboard_summary_card.dart';
@@ -83,7 +83,7 @@ class _DashboardViewState extends State<DashboardView> {
   }
 
   List<Bounty> get _availableChores =>
-      widget.bounties.where((b) => b.isOpen).toList();
+      widget.bounties.where((b) => b.isAvailable).toList();
 
   List<Bounty> get _myChores {
     final uid = widget.user.id.toString();
@@ -185,88 +185,85 @@ class _DashboardViewState extends State<DashboardView> {
     required IconData emptyIcon,
     bool showPostButton = false,
   }) {
+    const primaryGreen = Color(0xFF1B8354);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 2, bottom: 10),
-          child: Text(
-            title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF0F172A),
-              letterSpacing: -0.3,
-            ),
-          ),
-        ),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFCBD5E1), width: 1.4),
-          ),
-          child: bounties.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(emptyIcon, size: 36, color: const Color(0xFF94A3B8)),
-                        const SizedBox(height: 8),
-                        Text(
-                          emptyTitle,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF475569),
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          emptySubtitle,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF94A3B8),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        if (showPostButton) ...[
-                          const SizedBox(height: 12),
-                          TextButton.icon(
-                            onPressed: widget.onCreateBounty,
-                            icon: const Icon(Icons.add_rounded, size: 16),
-                            label: const Text('Post a Bounty'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: const Color(0xFF1B8354),
-                              textStyle: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                              ),
+          child: Row(
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: bounties.isNotEmpty
+                      ? const Color(0xFFDCFCE7)
+                      : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${bounties.length}',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: bounties.isNotEmpty
+                        ? const Color(0xFF15803D)
+                        : const Color(0xFF64748B),
+                  ),
+                ),
+              ),
+              const Spacer(),
+              if (showPostButton && bounties.isNotEmpty)
+                Material(
+                  color: const Color(0xFFECFDF5),
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    onTap: widget.onCreateBounty,
+                    borderRadius: BorderRadius.circular(12),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.add_rounded, size: 15, color: primaryGreen),
+                          SizedBox(width: 3),
+                          Text(
+                            'Post',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: primaryGreen,
                             ),
                           ),
                         ],
-                      ],
+                      ),
                     ),
                   ),
-                )
-              : Column(
-                  children: bounties.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final bounty = entry.value;
-                    final isLast = index == bounties.length - 1;
-                    return DashboardBountyCard(
-                      bounty: bounty,
-                      currentUserId: widget.user.id.toString(),
-                      currentUserName: widget.user.name,
-                      onTap: () => widget.onSelectBounty(bounty),
-                      margin: isLast ? EdgeInsets.zero : const EdgeInsets.only(bottom: 10),
-                    );
-                  }).toList(),
                 ),
+            ],
+          ),
+        ),
+        DashboardChoreList(
+          bounties: bounties,
+          currentUserId: widget.user.id.toString(),
+          currentUserName: widget.user.name,
+          onSelectBounty: widget.onSelectBounty,
+          emptyIcon: emptyIcon,
+          emptyTitle: emptyTitle,
+          emptySubtitle: emptySubtitle,
+          showPostButton: showPostButton,
+          onCreateBounty: widget.onCreateBounty,
         ),
       ],
     );

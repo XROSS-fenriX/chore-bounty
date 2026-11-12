@@ -20,6 +20,7 @@ class Bounty extends Model
         'title',
         'description',
         'difficulty',
+        'category',
         'xp_reward',
         'reward_value',
         'reward_description',

@@ -6,6 +6,7 @@ use App\Http\Resources\HouseholdResource;
 use App\Models\Household;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
 class HouseholdController extends Controller
@@ -48,11 +49,7 @@ class HouseholdController extends Controller
 
     public function show(Request $request, Household $household)
     {
-        abort_unless(
-            $household->members()->where('users.id', $request->user()->id)->exists(),
-            403,
-            'You are not a member of this household.'
-        );
+        Gate::authorize('view', $household);
 
         return new HouseholdResource(
             $household->load(['creator', 'members'])
@@ -61,11 +58,7 @@ class HouseholdController extends Controller
 
     public function update(Request $request, Household $household)
     {
-        abort_unless(
-            $household->members()->where('users.id', $request->user()->id)->exists(),
-            403,
-            'You are not a member of this household.'
-        );
+        Gate::authorize('update', $household);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
@@ -78,11 +71,7 @@ class HouseholdController extends Controller
 
     public function destroy(Request $request, Household $household)
     {
-        abort_unless(
-            $household->created_by === $request->user()->id,
-            403,
-            'Only the household creator can delete this household.'
-        );
+        Gate::authorize('delete', $household);
 
         $household->delete();
 

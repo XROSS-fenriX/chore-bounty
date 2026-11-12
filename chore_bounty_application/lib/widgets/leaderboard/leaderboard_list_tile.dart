@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/leaderboard_entry.dart';
 import '../avatar/user_avatar_widget.dart';
 import '../bounty_form/bounty_category_icons.dart';
+import '../ui.dart';
 
 class LeaderboardListTile extends StatelessWidget {
   const LeaderboardListTile({
@@ -17,101 +18,95 @@ class LeaderboardListTile extends StatelessWidget {
   final bool isCurrentUser;
   final VoidCallback? onTap;
 
+  Color _rankColor(int rank) {
+    switch (rank) {
+      case 1:
+        return const Color(0xFFD97706);
+      case 2:
+        return const Color(0xFF475569);
+      case 3:
+        return const Color(0xFFC2410C);
+      default:
+        return const Color(0xFF64748B);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final score = entry.totalTokens;
+    const primaryGreen = Color(0xFF1B8354);
+    final displayName = isCurrentUser ? '${entry.name} (You)' : entry.name;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        decoration: BoxDecoration(
-          color: isCurrentUser ? const Color(0xFF1B8354).withAlpha(12) : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            // Rank Number
-            SizedBox(
-              width: 28,
-              child: Text(
-                '$displayRank',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF64748B),
-                ),
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isCurrentUser ? primaryGreen : const Color(0xFFE2E8F0),
+              width: isCurrentUser ? 1.6 : 1.2,
+            ),
+          ),
+          child: Row(
+            children: [
+              UserAvatarWidget(
+                avatarId: entry.avatarUrl,
+                userName: entry.name,
+                size: 44,
               ),
-            ),
-            const SizedBox(width: 8),
-
-            // User Avatar
-            UserAvatarWidget(
-              avatarId: entry.avatarUrl,
-              userName: entry.name,
-              size: 42,
-            ),
-            const SizedBox(width: 14),
-
-            // User Name & Optional 'You' Badge
-            Expanded(
-              child: Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      entry.name,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      displayName,
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF1E293B),
+                        color: Color(0xFF0F172A),
                         letterSpacing: -0.2,
                       ),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  if (isCurrentUser) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1B8354),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Text(
-                        'You',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                    const SizedBox(height: 3),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const BountyCoinWidget(size: 15),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${entry.totalTokens}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF64748B),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
-                ],
-              ),
-            ),
-
-            // Score with Coin
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const BountyCoinWidget(size: 20),
-                const SizedBox(width: 6),
-                Text(
-                  '$score',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF1E293B),
-                  ),
                 ),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(width: 12),
+              Text(
+                formatOrdinalRank(displayRank),
+                style: TextStyle(
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w800,
+                  color: _rankColor(displayRank),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
-

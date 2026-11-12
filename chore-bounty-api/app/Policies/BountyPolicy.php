@@ -91,16 +91,15 @@ class BountyPolicy
 
     public function complete(User $user, Bounty $bounty): Response
     {
-        // Allow assignee to mark completed / submit, or creator to approve
-        $isAssignee = ($bounty->assignee_id === $user->id) ||
-                      $bounty->claims()->where('user_id', $user->id)->where('status', 'active')->exists();
-        $isCreator = ($bounty->created_by === $user->id);
-
-        if ($isAssignee || $isCreator) {
-            return Response::allow();
+        if ($bounty->created_by !== $user->id) {
+            return Response::deny('Only the bounty creator can mark this bounty completed without review.');
         }
 
-        return Response::deny('You are not authorized to complete or verify this bounty.');
+        if (! in_array($bounty->status, ['claimed', 'in_progress', 'submitted'])) {
+            return Response::deny('This bounty cannot be marked completed from its current status.');
+        }
+
+        return Response::allow();
     }
 
     public function verify(User $user, Bounty $bounty): Response
