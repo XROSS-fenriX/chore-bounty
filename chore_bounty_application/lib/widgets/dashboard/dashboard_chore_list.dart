@@ -67,7 +67,7 @@ class DashboardChoreList extends StatelessWidget {
                 TextButton.icon(
                   onPressed: onCreateBounty,
                   icon: const Icon(Icons.add_rounded, size: 16),
-                  label: const Text('Post a Bounty'),
+                  label: const Text('Post a Chore'),
                   style: TextButton.styleFrom(
                     foregroundColor: const Color(0xFF1B8354),
                     textStyle: const TextStyle(

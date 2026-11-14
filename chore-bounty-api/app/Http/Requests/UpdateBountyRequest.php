@@ -52,7 +52,7 @@ class UpdateBountyRequest extends FormRequest
             'description' => ['nullable', 'string', 'max:1000'],
             'difficulty' => ['sometimes', 'required', Rule::in(['easy', 'medium', 'hard', 'epic'])],
             'category' => ['sometimes', 'nullable', 'string', 'max:50'],
-            'xp_reward' => ['nullable', 'integer', 'min:10', 'max:1000'],
+            'xp_reward' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'reward_value' => ['nullable', 'numeric', 'min:0'],
             'reward_description' => ['sometimes', 'required', 'string', 'max:255'],
             'due_at' => ['nullable', 'date'],

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../models/app_user.dart';
 import '../../models/bounty.dart';
 import '../../models/household.dart';
 import '../avatar/user_avatar_widget.dart';
@@ -20,6 +19,7 @@ class UserProfileHeaderCard extends StatelessWidget {
     this.joinedAt,
     this.isCurrentUser = false,
     this.onAvatarTap,
+    this.statsRow,
   });
 
   final String name;
@@ -31,6 +31,7 @@ class UserProfileHeaderCard extends StatelessWidget {
   final DateTime? joinedAt;
   final bool isCurrentUser;
   final VoidCallback? onAvatarTap;
+  final Widget? statsRow;
 
   String _formatJoinedDate(DateTime date) {
     const months = [
@@ -42,19 +43,37 @@ class UserProfileHeaderCard extends StatelessWidget {
     return 'Joined $month ${date.year}';
   }
 
+  IconData? _genderIcon(String? rawGender) {
+    if (rawGender == null) return null;
+    final g = rawGender.trim().toLowerCase();
+    if (g == 'male') return Icons.male_rounded;
+    if (g == 'female') return Icons.female_rounded;
+    if (g.isNotEmpty) return Icons.transgender_rounded;
+    return null;
+  }
+
+  Color _genderColor(String? rawGender) {
+    if (rawGender == null) return const Color(0xFF64748B);
+    final g = rawGender.trim().toLowerCase();
+    if (g == 'male') return const Color(0xFF2563EB);
+    if (g == 'female') return const Color(0xFFEC4899);
+    return const Color(0xFF8B5CF6);
+  }
+
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1B8354);
     final displayName = isCurrentUser ? '$name (You)' : name;
     final isOwner = role?.toLowerCase() == 'owner';
-    final genderLabel = AppUser.formatGender(gender);
+    final gIcon = _genderIcon(gender);
+    final gColor = _genderColor(gender);
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.4),
       ),
       child: Column(
         children: [
@@ -67,19 +86,37 @@ class UserProfileHeaderCard extends StatelessWidget {
             showEditBadge: onAvatarTap != null,
             onTap: onAvatarTap,
           ),
-          const SizedBox(height: 14),
-          Text(
-            displayName,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 21,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF0F172A),
-              letterSpacing: -0.3,
-            ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  displayName,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                    letterSpacing: -0.3,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (gIcon != null) ...[
+                const SizedBox(width: 6),
+                Icon(
+                  gIcon,
+                  size: 22,
+                  color: gColor,
+                ),
+              ],
+            ],
           ),
           if (email.isNotEmpty) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
             Text(
               email,
               textAlign: TextAlign.center,
@@ -92,8 +129,7 @@ class UserProfileHeaderCard extends StatelessWidget {
           ],
           if (role != null ||
               household != null ||
-              joinedAt != null ||
-              genderLabel.isNotEmpty) ...[
+              joinedAt != null) ...[
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
@@ -109,12 +145,6 @@ class UserProfileHeaderCard extends StatelessWidget {
                         ? Colors.amber.shade900
                         : Colors.blue.shade800,
                   ),
-                if (genderLabel.isNotEmpty)
-                  _ProfileTag(
-                    label: genderLabel,
-                    bgColor: const Color(0xFFF3E8FF),
-                    textColor: const Color(0xFF6B21A8),
-                  ),
                 if (household != null)
                   _ProfileTag(
                     label: household!.name,
@@ -129,6 +159,12 @@ class UserProfileHeaderCard extends StatelessWidget {
                   ),
               ],
             ),
+          ],
+          if (statsRow != null) ...[
+            const SizedBox(height: 18),
+            const Divider(height: 1, thickness: 1, color: Color(0xFFF1F5F9)),
+            const SizedBox(height: 14),
+            statsRow!,
           ],
         ],
       ),
@@ -173,11 +209,13 @@ class UserProfileStatsRow extends StatelessWidget {
     required this.rank,
     required this.totalTokens,
     required this.completedCount,
+    this.standalone = true,
   });
 
   final int? rank;
   final int totalTokens;
   final int completedCount;
+  final bool standalone;
 
   @override
   Widget build(BuildContext context) {
@@ -185,73 +223,105 @@ class UserProfileStatsRow extends StatelessWidget {
     final rankLabel =
         rank != null && rank! > 0 ? formatOrdinalRank(rank!) : '—';
 
-    return Row(
+    final statsContent = Row(
       children: [
         Expanded(
-          child: _StatCard(
-            label: 'Rank',
-            valueWidget: Text(
-              rankLabel,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                color: primaryGreen,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _StatCard(
-            label: 'Points',
-            valueWidget: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const BountyCoinWidget(size: 18),
-                const SizedBox(width: 5),
-                Text(
-                  '$totalTokens',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF0F172A),
-                  ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                rankLabel,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: primaryGreen,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 3),
+              const Text(
+                'Rank',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(width: 10),
+        Container(
+          width: 1,
+          height: 32,
+          color: const Color(0xFFE2E8F0),
+        ),
         Expanded(
-          child: _StatCard(
-            label: 'Completed',
-            valueWidget: Text(
-              '$completedCount',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                color: Color(0xFF0F172A),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const BountyCoinWidget(size: 18),
+                  const SizedBox(width: 5),
+                  Text(
+                    '$totalTokens',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                ],
               ),
-            ),
+              const SizedBox(height: 3),
+              const Text(
+                'Points',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          width: 1,
+          height: 32,
+          color: const Color(0xFFE2E8F0),
+        ),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$completedCount',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 3),
+              const Text(
+                'Completed',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+            ],
           ),
         ),
       ],
     );
-  }
-}
 
-class _StatCard extends StatelessWidget {
-  const _StatCard({
-    required this.label,
-    required this.valueWidget,
-  });
+    if (!standalone) {
+      return statsContent;
+    }
 
-  final String label;
-  final Widget valueWidget;
-
-  @override
-  Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
       decoration: BoxDecoration(
@@ -259,20 +329,7 @@ class _StatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
       ),
-      child: Column(
-        children: [
-          valueWidget,
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF64748B),
-            ),
-          ),
-        ],
-      ),
+      child: statsContent,
     );
   }
 }

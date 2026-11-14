@@ -84,7 +84,7 @@ class HouseholdView extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(22, 22, 22, 100),
         children: [
           PageMenuHeader(
-            title: 'Guild',
+            title: 'Household',
             onMenuTap: onMenuTap,
           ),
           const SizedBox(height: 18),
@@ -183,9 +183,9 @@ class HouseholdView extends StatelessWidget {
     final updatedName = await showDialog<String>(
       context: context,
       builder: (_) => PromptInputDialog(
-        title: 'Rename Guild',
+        title: 'Rename Household',
         initialValue: household.name,
-        labelText: 'Guild Name',
+        labelText: 'Household Name',
         confirmLabel: 'Save',
         autofocus: true,
         textCapitalization: TextCapitalization.words,
@@ -295,7 +295,7 @@ class HouseholdView extends StatelessWidget {
                     ),
                     if (household.isOwner && onRenameHousehold != null)
                       IconButton(
-                        tooltip: 'Rename guild',
+                        tooltip: 'Rename household',
                         visualDensity: VisualDensity.compact,
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(
@@ -485,7 +485,7 @@ class HouseholdView extends StatelessWidget {
                                 const SizedBox(width: 5),
                                 Flexible(
                                   child: Text(
-                                    '${stats.bountiesCount} ${stats.bountiesCount == 1 ? 'bounty' : 'bounties'}',
+                                    '${stats.bountiesCount} ${stats.bountiesCount == 1 ? 'chore' : 'chores'}',
                                     style: const TextStyle(
                                       fontSize: 12.5,
                                       fontWeight: FontWeight.w700,

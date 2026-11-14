@@ -6,6 +6,7 @@ use App\Http\Requests\ReviewBountyRequest;
 use App\Http\Requests\SubmitBountyRequest;
 use App\Http\Resources\BountyResource;
 use App\Models\Bounty;
+use App\Models\BountyNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -36,9 +37,18 @@ class BountyActionController extends Controller
             ]);
         });
 
+        $fresh = $bounty->fresh()->load(['creator', 'assignee', 'household']);
+        BountyNotification::dispatchForHousehold(
+            $fresh,
+            $user,
+            'claimed',
+            'Chore Claimed',
+            "{$user->name} claimed \"{$fresh->title}\"."
+        );
+
         return response()->json([
             'message' => 'Quest accepted! Best of luck, adventurer.',
-            'data' => new BountyResource($bounty->fresh()->load(['creator', 'assignee', 'household'])),
+            'data' => new BountyResource($fresh),
         ]);
     }
 
@@ -99,9 +109,18 @@ class BountyActionController extends Controller
             }
         });
 
+        $fresh = $bounty->fresh()->load(['creator', 'assignee', 'household']);
+        BountyNotification::dispatchForHousehold(
+            $fresh,
+            $user,
+            'submitted',
+            'Chore Submitted',
+            "{$user->name} submitted \"{$fresh->title}\" for approval."
+        );
+
         return response()->json([
             'message' => 'Completion proof submitted for roommate verification.',
-            'data' => new BountyResource($bounty->fresh()->load(['creator', 'assignee', 'household'])),
+            'data' => new BountyResource($fresh),
         ]);
     }
 
@@ -124,9 +143,20 @@ class BountyActionController extends Controller
             $this->finalizeCompletion($lockedBounty, $user->id);
         });
 
+        $fresh = $bounty->fresh()->load(['creator', 'assignee', 'household']);
+        $tokens = (int) ($fresh->reward_value ?: $fresh->xp_reward ?: 50);
+        $assigneeName = $fresh->assignee?->name ?? 'Roommate';
+        BountyNotification::dispatchForHousehold(
+            $fresh,
+            $user,
+            'awarded',
+            'Bounty Awarded',
+            "{$user->name} awarded {$tokens} Tokens to {$assigneeName} for \"{$fresh->title}\"."
+        );
+
         return response()->json([
             'message' => 'Bounty marked as completed! Points disbursed.',
-            'data' => new BountyResource($bounty->fresh()->load(['creator', 'assignee', 'household'])),
+            'data' => new BountyResource($fresh),
         ]);
     }
 
@@ -147,9 +177,20 @@ class BountyActionController extends Controller
             $this->finalizeCompletion($lockedBounty, $user->id);
         });
 
+        $fresh = $bounty->fresh()->load(['creator', 'assignee', 'household']);
+        $tokens = (int) ($fresh->reward_value ?: $fresh->xp_reward ?: 50);
+        $assigneeName = $fresh->assignee?->name ?? 'Roommate';
+        BountyNotification::dispatchForHousehold(
+            $fresh,
+            $user,
+            'awarded',
+            'Bounty Awarded',
+            "{$user->name} awarded {$tokens} Tokens to {$assigneeName} for \"{$fresh->title}\"."
+        );
+
         return response()->json([
             'message' => 'Bounty approved! Tokens disbursed to assignee.',
-            'data' => new BountyResource($bounty->fresh()->load(['creator', 'assignee', 'household'])),
+            'data' => new BountyResource($fresh),
         ]);
     }
 
@@ -220,9 +261,18 @@ class BountyActionController extends Controller
 
         $bounty->update(['status' => 'cancelled']);
 
+        $fresh = $bounty->fresh()->load(['creator', 'assignee', 'household']);
+        BountyNotification::dispatchForHousehold(
+            $fresh,
+            $request->user(),
+            'cancelled',
+            'Chore Cancelled',
+            "{$request->user()->name} cancelled \"{$fresh->title}\"."
+        );
+
         return response()->json([
             'message' => 'Bounty cancelled.',
-            'data' => new BountyResource($bounty->fresh()->load(['creator', 'assignee', 'household'])),
+            'data' => new BountyResource($fresh),
         ]);
     }
 }

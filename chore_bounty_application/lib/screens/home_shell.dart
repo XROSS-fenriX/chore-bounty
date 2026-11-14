@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
+import '../models/app_notification.dart';
 import '../models/app_user.dart';
 import '../models/bounty.dart';
 import '../models/household.dart';
@@ -24,6 +26,8 @@ import 'edit_profile_screen.dart';
 export 'edit_profile_screen.dart';
 import 'leaderboard_view.dart';
 export 'leaderboard_view.dart';
+import 'notifications_screen.dart';
+export 'notifications_screen.dart';
 import 'profile_view.dart';
 export 'profile_view.dart';
 import 'user_detail_screen.dart';
@@ -64,9 +68,29 @@ class _HomeShellState extends State<HomeShell> {
   List<Bounty> _latestBounties = const [];
   List<LeaderboardEntry> _latestLeaderboard = const [];
   List<HouseholdMember> _latestMembers = const [];
+  List<AppNotification> _latestNotifications = const [];
+  final Set<String> _seenNotificationIds = {};
+  bool _hasCompletedInitialNotificationLoad = false;
+  Timer? _realtimeTimer;
 
   static const Color primaryGreen = Color(0xFF1B8354);
   static const Color bgLight = Color(0xFFFAF8F5);
+
+  bool get _isTestEnvironment =>
+      WidgetsBinding.instance.runtimeType.toString().contains('Test');
+
+  int get _unreadNotificationCount {
+    final uid = currentUser.id.toString();
+    final uname = currentUser.name;
+    if (_latestNotifications.isNotEmpty) {
+      return _latestNotifications
+          .where((n) => !n.isRead && !n.isTriggeredBy(uid, uname))
+          .length;
+    }
+    return _latestBounties
+        .where((b) => b.creatorId == uid && b.isSubmitted)
+        .length;
+  }
 
   @override
   void initState() {
@@ -79,6 +103,18 @@ class _HomeShellState extends State<HomeShell> {
     leaderboardFuture = widget.bounties.getLeaderboard();
     membersFuture = Future.value(const <HouseholdMember>[]);
     _initHouseholds();
+    if (!_isTestEnvironment) {
+      _realtimeTimer = Timer.periodic(
+        const Duration(seconds: 4),
+        (_) => _pollRealtimeUpdates(),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _realtimeTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -233,6 +269,87 @@ class _HomeShellState extends State<HomeShell> {
     );
   }
 
+  Future<void> _pollRealtimeUpdates() async {
+    if (!mounted) return;
+    final hId = currentHousehold?.id.toString();
+    try {
+      final bounties = await widget.bounties.all(householdId: hId);
+      final notifications = await widget.bounties.notifications(
+        householdId: hId,
+        fallbackBounties: bounties,
+        currentUserId: currentUser.id.toString(),
+        currentUserName: currentUser.name,
+      );
+      if (!mounted) return;
+      _processNotifications(notifications);
+      setState(() {
+        _latestBounties = bounties;
+        future = Future.value(bounties);
+      });
+    } catch (_) {}
+  }
+
+  void _processNotifications(
+    List<AppNotification> notifications, {
+    bool notifyNew = true,
+  }) {
+    final uid = currentUser.id.toString();
+    final uname = currentUser.name;
+    final filtered = notifications
+        .where((n) => !n.isTriggeredBy(uid, uname))
+        .toList();
+
+    AppNotification? newestUnseen;
+    if (_hasCompletedInitialNotificationLoad && notifyNew) {
+      for (final n in filtered) {
+        if (!_seenNotificationIds.contains(n.id) && !n.isRead) {
+          newestUnseen ??= n;
+        }
+      }
+    }
+    for (final n in filtered) {
+      _seenNotificationIds.add(n.id);
+    }
+    _hasCompletedInitialNotificationLoad = true;
+    _latestNotifications = filtered;
+
+    if (newestUnseen != null && mounted && !_isTestEnvironment) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                newestUnseen.eventName,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13.5,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                newestUnseen.description,
+                style: const TextStyle(fontSize: 12.5, color: Colors.white),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF0F172A),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+          action: SnackBarAction(
+            label: 'View',
+            textColor: const Color(0xFF86EFAC),
+            onPressed: openNotificationsPage,
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> refresh({bool showError = false}) async {
     final hId = currentHousehold?.id.toString();
     final householdIntId = currentHousehold?.id;
@@ -248,9 +365,16 @@ class _HomeShellState extends State<HomeShell> {
       final bounties = await future;
       final lb = await leaderboardFuture;
       final members = await membersFuture;
+      final notifications = await widget.bounties.notifications(
+        householdId: hId,
+        fallbackBounties: bounties,
+        currentUserId: currentUser.id.toString(),
+        currentUserName: currentUser.name,
+      );
       if (mounted) {
         setState(() {
           _syncMemberAvatars(bounties, lb, members: members);
+          _processNotifications(notifications);
         });
       }
     } catch (e) {
@@ -328,196 +452,37 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
-  void openNotificationsSheet() {
+  Future<void> openNotificationsPage() async {
     final uid = currentUser.id.toString();
-    final pendingApprovals = _latestBounties
-        .where((b) => b.creatorId == uid && b.isSubmitted)
+    final uname = currentUser.name;
+    final filteredNotifications = _latestNotifications
+        .where((n) => !n.isTriggeredBy(uid, uname))
         .toList();
-    final ongoingTasks = _latestBounties
-        .where((b) => b.assigneeId == uid && b.isClaimed)
-        .toList();
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Notifications',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () => Navigator.pop(sheetContext),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                if (pendingApprovals.isEmpty && ongoingTasks.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 28,
-                      horizontal: 16,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: const Column(
-                      children: [
-                        Icon(
-                          Icons.notifications_none_rounded,
-                          size: 34,
-                          color: Color(0xFF94A3B8),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'All caught up',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF334155),
-                          ),
-                        ),
-                        SizedBox(height: 3),
-                        Text(
-                          'No submitted bounties waiting for your review.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            color: Color(0xFF64748B),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else ...[
-                  if (pendingApprovals.isNotEmpty) ...[
-                    const Text(
-                      'Awaiting Your Review',
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF475569),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ...pendingApprovals.map(
-                      (b) => _buildNotificationBountyTile(
-                        sheetContext: sheetContext,
-                        bounty: b,
-                        badgeLabel: 'Review',
-                        badgeBg: const Color(0xFFFEF3C7),
-                        badgeFg: const Color(0xFFB45309),
-                        subtitle:
-                            'Submitted by ${(b.assignee != null && b.assignee!.isNotEmpty) ? b.assignee : 'Roommate'}',
-                      ),
-                    ),
-                  ],
-                  if (ongoingTasks.isNotEmpty) ...[
-                    if (pendingApprovals.isNotEmpty) const SizedBox(height: 12),
-                    const Text(
-                      'Your Ongoing Tasks',
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF475569),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ...ongoingTasks.take(3).map(
-                      (b) => _buildNotificationBountyTile(
-                        sheetContext: sheetContext,
-                        bounty: b,
-                        badgeLabel: '${b.points > 0 ? b.points : 50} pts',
-                        badgeBg: const Color(0xFFDCFCE7),
-                        badgeFg: const Color(0xFF15803D),
-                        subtitle: 'Tap to submit completion proof',
-                      ),
-                    ),
-                  ],
-                ],
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildNotificationBountyTile({
-    required BuildContext sheetContext,
-    required Bounty bounty,
-    required String badgeLabel,
-    required Color badgeBg,
-    required Color badgeFg,
-    required String subtitle,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: ListTile(
-        dense: true,
-        title: Text(
-          bounty.title,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF0F172A),
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NotificationsScreen(
+          user: currentUser,
+          bounties: widget.bounties,
+          householdId: currentHousehold?.id.toString(),
+          initialBounties: _latestBounties,
+          initialNotifications: filteredNotifications,
+          onSelectBounty: (bounty) async {
+            await openDetail(bounty);
+            if (mounted) {
+              await refresh();
+            }
+          },
+          onRefreshParent: refresh,
         ),
-        subtitle: Text(
-          subtitle,
-          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-          decoration: BoxDecoration(
-            color: badgeBg,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            badgeLabel,
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w800,
-              color: badgeFg,
-            ),
-          ),
-        ),
-        onTap: () {
-          Navigator.pop(sheetContext);
-          openDetail(bounty);
-        },
       ),
     );
+    if (mounted) {
+      await refresh();
+    }
   }
+
+  void openNotificationsSheet() => openNotificationsPage();
 
   Future<void> handleRenameHousehold(Household h, String newName) async {
     final trimmed = newName.trim();
@@ -537,7 +502,7 @@ class _HomeShellState extends State<HomeShell> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Guild renamed to ${updated.name}'),
+          content: Text('Household renamed to ${updated.name}'),
           backgroundColor: primaryGreen,
           behavior: SnackBarBehavior.floating,
         ),
@@ -828,7 +793,7 @@ class _HomeShellState extends State<HomeShell> {
                   _buildDrawerNavItem(
                     icon: Icons.task_alt_outlined,
                     activeIcon: Icons.task_alt_rounded,
-                    label: 'Bounties',
+                    label: 'Chores',
                     index: 1,
                   ),
                   _buildDrawerNavItem(
@@ -840,7 +805,7 @@ class _HomeShellState extends State<HomeShell> {
                   _buildDrawerNavItem(
                     icon: Icons.holiday_village_outlined,
                     activeIcon: Icons.holiday_village_rounded,
-                    label: 'Guild',
+                    label: 'Household',
                     index: 3,
                   ),
                   _buildDrawerNavItem(
@@ -867,7 +832,7 @@ class _HomeShellState extends State<HomeShell> {
                       },
                       icon: const Icon(Icons.add_rounded, size: 20),
                       label: const Text(
-                        'Post a Bounty',
+                        'Post a Chore',
                         style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 14.5,
@@ -1171,15 +1136,21 @@ class _HomeShellState extends State<HomeShell> {
             return DashboardView(
               user: currentUser,
               currentHousehold: currentHousehold,
+              myHouseholds: myHouseholds,
               bounties: bountiesList,
               leaderboard: leaderboardList,
               isLoading: isLoading,
               errorMessage: errorMessage,
+              notificationCount: _unreadNotificationCount,
               onRefresh: () => refresh(showError: true),
               onSelectBounty: openDetail,
               onCreateBounty: create,
               onHouseholdSwitch: openHouseholdSwitcher,
-              onNotificationTap: openNotificationsSheet,
+              onHouseholdSelected: (h) async {
+                await switchHousehold(h);
+              },
+              onAddHousehold: openAddHousehold,
+              onNotificationTap: openNotificationsPage,
               onProfileTap: () => setState(() => tab = 4),
               onViewMyTasks: () => setState(() => tab = 1),
               onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),

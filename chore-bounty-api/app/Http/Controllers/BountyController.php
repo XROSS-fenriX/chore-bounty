@@ -6,6 +6,7 @@ use App\Http\Requests\StoreBountyRequest;
 use App\Http\Requests\UpdateBountyRequest;
 use App\Http\Resources\BountyResource;
 use App\Models\Bounty;
+use App\Models\BountyNotification;
 use App\Models\Household;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -54,6 +55,15 @@ class BountyController extends Controller
             'created_by' => $request->user()->id,
             'status' => 'open',
         ]);
+
+        $tokens = (int) ($bounty->reward_value ?: $bounty->xp_reward ?: 50);
+        BountyNotification::dispatchForHousehold(
+            $bounty,
+            $request->user(),
+            'posted',
+            'Chore Posted',
+            "{$request->user()->name} posted \"{$bounty->title}\" ({$tokens} Tokens)."
+        );
 
         return (new BountyResource($bounty->load(['creator', 'assignee', 'household'])))
             ->response()

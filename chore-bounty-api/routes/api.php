@@ -8,6 +8,7 @@ use App\Http\Controllers\BountyController;
 use App\Http\Controllers\HouseholdController;
 use App\Http\Controllers\HouseholdUserController;
 use App\Http\Controllers\LeaderboardController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\RewardRedemptionController;
 use App\Http\Controllers\UserController;
 use Illuminate\Http\Request;
@@ -53,6 +54,12 @@ Route::middleware('auth:sanctum')->group(function () {
         'households/{household}/members/{user}',
         [HouseholdUserController::class, 'destroy']
     );
+
+    // Notifications
+    Route::get('notifications', [NotificationController::class, 'index']);
+    Route::post('notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+    Route::post('notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
+    Route::patch('notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
 
     // Bounty REST Resource
     Route::apiResource('bounties', BountyController::class);

@@ -53,7 +53,6 @@ class _ChoresViewState extends State<ChoresView> {
 
   String _selectedFilter = 'Available';
   String _selectedPostedStatus = 'All';
-  bool _showSearch = false;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -89,6 +88,9 @@ class _ChoresViewState extends State<ChoresView> {
         return true;
     }
   }
+
+  List<Bounty> get _readyForApprovalChores =>
+      widget.bounties.where((b) => _isPostedByMe(b) && b.isSubmitted).toList();
 
   List<Bounty> get _filteredBounties {
     final uid = widget.user.id.toString();
@@ -176,189 +178,153 @@ class _ChoresViewState extends State<ChoresView> {
         ),
         padding: const EdgeInsets.fromLTRB(22, 22, 22, 100),
         children: [
+          // Row 1: Menu icon, Chores title, Square [+] button
           PageMenuHeader(
-            title: 'Bounties',
+            title: 'Chores',
             onMenuTap: widget.onMenuTap,
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  tooltip: _showSearch ? 'Close search' : 'Search bounties',
-                  onPressed: () {
-                    setState(() {
-                      _showSearch = !_showSearch;
-                      if (!_showSearch) {
-                        _searchController.clear();
-                        _searchQuery = '';
-                      }
-                    });
-                  },
-                  icon: Icon(
-                    _showSearch ? Icons.close_rounded : Icons.search_rounded,
-                    color: const Color(0xFF475569),
-                    size: 22,
-                  ),
+            trailing: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: primaryGreen,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: IconButton(
+                tooltip: 'Post a chore',
+                padding: EdgeInsets.zero,
+                icon: const Icon(
+                  Icons.add_rounded,
+                  color: Colors.white,
+                  size: 22,
                 ),
-                const SizedBox(width: 2),
-                Material(
-                  color: primaryGreen,
-                  borderRadius: BorderRadius.circular(12),
-                  child: InkWell(
-                    onTap: widget.onCreateBounty,
-                    borderRadius: BorderRadius.circular(12),
-                    child: const Padding(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.add_rounded, size: 16, color: Colors.white),
-                          SizedBox(width: 4),
-                          Text(
-                            'Post',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+                onPressed: widget.onCreateBounty,
+              ),
             ),
           ),
-          if (_showSearch) ...[
-            const SizedBox(height: 10),
-            TextField(
-              controller: _searchController,
-              onChanged: (val) => setState(() => _searchQuery = val),
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF0F172A),
-              ),
-              decoration: InputDecoration(
-                hintText: 'Search bounties by title or category...',
-                hintStyle: const TextStyle(
-                  fontSize: 13.5,
-                  color: Color(0xFF94A3B8),
-                ),
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  size: 20,
-                  color: Color(0xFF64748B),
-                ),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(
-                          Icons.clear_rounded,
-                          size: 18,
-                          color: Color(0xFF94A3B8),
-                        ),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      )
-                    : null,
-                filled: true,
-                fillColor: Colors.white,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 11,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: primaryGreen, width: 1.4),
-                ),
-              ),
-            ),
-          ],
           const SizedBox(height: 14),
 
-          // Primary Category Filters
-          DashboardFilterPills(
-            selectedFilter: _selectedFilter,
-            filters: primaryFilters,
-            scrollable: true,
-            onFilterChanged: (filter) {
-              setState(() => _selectedFilter = filter);
-            },
+          // Row 2: Search input on left, Dropdown on right
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFFE2E8F0),
+                      width: 1.2,
+                    ),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (val) => setState(() => _searchQuery = val),
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF0F172A),
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Search chores...',
+                      hintStyle: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF94A3B8),
+                        fontWeight: FontWeight.w500,
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        size: 20,
+                        color: Color(0xFF64748B),
+                      ),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(
+                                Icons.clear_rounded,
+                                size: 16,
+                                color: Color(0xFF94A3B8),
+                              ),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                            )
+                          : null,
+                      filled: false,
+                      fillColor: Colors.transparent,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      focusedErrorBorder: InputBorder.none,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                height: 44,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFFE2E8F0),
+                    width: 1.2,
+                  ),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedFilter,
+                    dropdownColor: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    icon: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: Color(0xFF64748B),
+                      size: 20,
+                    ),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0F172A),
+                    ),
+                    items: primaryFilters.map((filter) {
+                      return DropdownMenuItem<String>(
+                        value: filter,
+                        child: Text(filter),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _selectedFilter = value);
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ],
           ),
 
-          // Secondary Status Dropdown Filter for 'Posted by Me'
+          // Row 3: Only show Pill filters when "Posted by Me" is the chosen filter
           if (_selectedFilter == 'Posted by Me') ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Text(
-                  'Status',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF475569),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Container(
-                    height: 38,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: const Color(0xFFE2E8F0),
-                        width: 1.1,
-                      ),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedPostedStatus,
-                        isExpanded: true,
-                        dropdownColor: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        icon: const Icon(
-                          Icons.keyboard_arrow_down_rounded,
-                          color: Color(0xFF475569),
-                          size: 19,
-                        ),
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF0F172A),
-                        ),
-                        items: postedStatusFilters.map((status) {
-                          return DropdownMenuItem<String>(
-                            value: status,
-                            child: Text(status),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() => _selectedPostedStatus = value);
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            const SizedBox(height: 12),
+            DashboardFilterPills(
+              selectedFilter: _selectedPostedStatus,
+              filters: postedStatusFilters,
+              scrollable: true,
+              onFilterChanged: (filter) {
+                setState(() => _selectedPostedStatus = filter);
+              },
             ),
           ],
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
 
           // Content / Loading / Error
           if (widget.isLoading && widget.bounties.isEmpty)
@@ -370,10 +336,67 @@ class _ChoresViewState extends State<ChoresView> {
             )
           else if (widget.errorMessage != null && widget.bounties.isEmpty)
             _buildErrorState(widget.errorMessage!)
-          else
+          else ...[
+            if (_readyForApprovalChores.isNotEmpty) ...[
+              _buildReadyForApprovalSection(),
+              const SizedBox(height: 22),
+            ],
             _buildChoreList(filtered),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildReadyForApprovalSection() {
+    final readyList = _readyForApprovalChores;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 10),
+          child: Row(
+            children: [
+              const Text(
+                'Ready for Approval',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${readyList.length}',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFFB45309),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        DashboardChoreList(
+          bounties: readyList,
+          currentUserId: widget.user.id.toString(),
+          currentUserName: widget.user.name,
+          onSelectBounty: widget.onSelectBounty,
+          emptyIcon: Icons.fact_check_outlined,
+          emptyTitle: 'No chores awaiting approval',
+          emptySubtitle: 'Submitted chores from roommates will appear here.',
+          showPostButton: false,
+          onCreateBounty: widget.onCreateBounty,
+        ),
+      ],
     );
   }
 

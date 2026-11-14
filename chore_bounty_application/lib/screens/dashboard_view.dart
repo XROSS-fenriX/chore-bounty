@@ -20,7 +20,10 @@ class DashboardView extends StatefulWidget {
     required this.onRefresh,
     required this.onSelectBounty,
     required this.onCreateBounty,
+    this.myHouseholds = const [],
     this.onHouseholdSwitch,
+    this.onHouseholdSelected,
+    this.onAddHousehold,
     this.onNotificationTap,
     this.onProfileTap,
     this.onViewMyTasks,
@@ -30,6 +33,7 @@ class DashboardView extends StatefulWidget {
 
   final AppUser user;
   final Household? currentHousehold;
+  final List<Household> myHouseholds;
   final List<Bounty> bounties;
   final List<LeaderboardEntry> leaderboard;
   final bool isLoading;
@@ -38,6 +42,8 @@ class DashboardView extends StatefulWidget {
   final ValueChanged<Bounty> onSelectBounty;
   final VoidCallback onCreateBounty;
   final VoidCallback? onHouseholdSwitch;
+  final ValueChanged<Household>? onHouseholdSelected;
+  final VoidCallback? onAddHousehold;
   final VoidCallback? onNotificationTap;
   final VoidCallback? onProfileTap;
   final VoidCallback? onViewMyTasks;
@@ -82,6 +88,18 @@ class _DashboardViewState extends State<DashboardView> {
     return widget.bounties.where((b) => b.isClaimed || b.isSubmitted).length;
   }
 
+  bool _isPostedByMe(Bounty b) {
+    final uid = widget.user.id.toString();
+    if (b.creatorId.isNotEmpty) {
+      return b.creatorId == uid;
+    }
+    return b.creator.trim().toLowerCase() ==
+        widget.user.name.trim().toLowerCase();
+  }
+
+  List<Bounty> get _readyForApprovalChores =>
+      widget.bounties.where((b) => _isPostedByMe(b) && b.isSubmitted).toList();
+
   List<Bounty> get _availableChores =>
       widget.bounties.where((b) => b.isAvailable).toList();
 
@@ -125,6 +143,10 @@ class _DashboardViewState extends State<DashboardView> {
             points: _userPoints,
             tasksOngoing: _tasksOngoing,
             householdName: widget.currentHousehold?.name,
+            currentHousehold: widget.currentHousehold,
+            households: widget.myHouseholds,
+            onHouseholdSelected: widget.onHouseholdSelected,
+            onAddHousehold: widget.onAddHousehold,
             onTap: widget.onViewMyTasks,
             onHouseholdTap: widget.onHouseholdSwitch ?? widget.onNotificationTap,
           ),
@@ -145,6 +167,19 @@ class _DashboardViewState extends State<DashboardView> {
           else if (widget.errorMessage != null && widget.bounties.isEmpty)
             _buildErrorState(widget.errorMessage!)
           else ...[
+            // Ready for Approval Section (shown when a chore is ready for approval)
+            if (_selectedFilter == 'All' && _readyForApprovalChores.isNotEmpty) ...[
+              _buildChoreSection(
+                title: 'Ready for Approval',
+                bounties: _readyForApprovalChores,
+                emptyTitle: 'No chores awaiting approval',
+                emptySubtitle: 'Submitted chores from roommates will appear here.',
+                emptyIcon: Icons.fact_check_outlined,
+                showPostButton: false,
+              ),
+              const SizedBox(height: 22),
+            ],
+
             // Available Chores Section
             if (showAvailable) ...[
               _buildChoreSection(
@@ -339,7 +374,7 @@ class _DashboardViewState extends State<DashboardView> {
           const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 36),
           const SizedBox(height: 10),
           const Text(
-            'Unable to load bounties',
+            'Unable to load chores',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,

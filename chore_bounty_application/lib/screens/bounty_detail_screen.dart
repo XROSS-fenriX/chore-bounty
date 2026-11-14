@@ -102,8 +102,11 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
       _bounty.assigneeId == widget.currentUser.id.toString();
 
   bool get _isCreator =>
-      _bounty.creatorId.isNotEmpty &&
-      _bounty.creatorId == widget.currentUser.id.toString();
+      (_bounty.creatorId.isNotEmpty &&
+          _bounty.creatorId == widget.currentUser.id.toString()) ||
+      (_bounty.creatorId.isEmpty &&
+          _bounty.creator.trim().toLowerCase() ==
+              widget.currentUser.name.trim().toLowerCase());
 
   String? _resolveAvatar({
     required bool isCurrentUser,
@@ -401,7 +404,7 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
       if (widget.onRefresh != null) await widget.onRefresh!();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bounty claimed successfully!')),
+        const SnackBar(content: Text('Chore claimed successfully!')),
       );
       Navigator.pop(context, true);
     } catch (e) {
@@ -451,7 +454,7 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
       if (widget.onRefresh != null) await widget.onRefresh!();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bounty released.')),
+        const SnackBar(content: Text('Chore released.')),
       );
       Navigator.pop(context, true);
     } catch (e) {
@@ -464,10 +467,137 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
   }
 
   Future<void> _handleVerify() async {
-    await _runAction(
-      request: () => widget.service.verify(_bounty.id),
-      successMessage: 'Bounty approved! Tokens disbursed.',
-    );
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await widget.service.verify(_bounty.id);
+      if (widget.onRefresh != null) await widget.onRefresh!();
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      final tokenAmount = _bounty.points > 0
+          ? _bounty.points
+          : (_bounty.rewardValue?.toInt() ?? 50);
+      final assigneeName =
+          (_bounty.assignee != null && _bounty.assignee!.trim().isNotEmpty)
+              ? _bounty.assignee!.trim()
+              : 'Roommate';
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => Dialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 68,
+                  height: 68,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFDCFCE7),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.verified_rounded,
+                    color: Color(0xFF1B8354),
+                    size: 38,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Chore Approved!',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'You approved "${_bounty.title}" completed by $assigneeName.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF475569),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFFDE68A)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const BountyCoinWidget(size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        '+$tokenAmount Tokens Awarded',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFFB45309),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF1B8354),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = widget.service.error(e);
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _handleReject() async {
@@ -476,7 +606,7 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
       builder: (_) => const PromptInputDialog(
         title: 'Request Redo',
         subtitle:
-            'Return this bounty to in-progress so the roommate can resubmit completion proof.',
+            'Return this chore to in-progress so the roommate can resubmit completion proof.',
         hintText: 'Optional note for the roommate...',
         confirmLabel: 'Request Redo',
         maxLines: 2,
@@ -492,7 +622,7 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
         _bounty.id,
         feedback: feedback.isEmpty ? null : feedback,
       ),
-      successMessage: 'Returned bounty to in-progress.',
+      successMessage: 'Returned chore to in-progress.',
     );
   }
 
@@ -511,7 +641,7 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
       if (widget.onRefresh != null) await widget.onRefresh!();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bounty updated successfully!')),
+        const SnackBar(content: Text('Chore updated successfully!')),
       );
       Navigator.pop(context, true);
     }
@@ -545,15 +675,15 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
 
   Future<void> _handleCancel() => _runAction(
         request: () => widget.service.cancel(_bounty.id),
-        successMessage: 'Bounty cancelled.',
+        successMessage: 'Chore cancelled.',
       );
 
   Future<void> _handleDelete() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete Bounty'),
-        content: const Text('Delete this bounty permanently? This cannot be undone.'),
+        title: const Text('Delete Chore'),
+        content: const Text('Delete this chore permanently? This cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -571,7 +701,7 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
     if (confirmed != true || !mounted) return;
     await _runAction(
       request: () => widget.service.delete(_bounty.id),
-      successMessage: 'Bounty deleted.',
+      successMessage: 'Chore deleted.',
     );
   }
 
@@ -604,7 +734,7 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'Bounty Details',
+          'Chore Details',
           style: TextStyle(
             fontSize: 19,
             fontWeight: FontWeight.w800,
@@ -991,15 +1121,15 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
           ),
           onPressed: _handleClaim,
           child: const Text(
-            'Claim This Bounty',
+            'Claim This Chore',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
           ),
         ),
       );
     }
 
-    // 2. Open chore - creator -> Single row: Edit, Cancel, Delete
-    if (_bounty.isOpen && _isCreator) {
+    // 2. Available or Taken chore - creator -> Single row: Edit, Cancel, Delete
+    if ((_bounty.isAvailable || _bounty.isClaimed) && _isCreator) {
       return Row(
         children: [
           _buildCreatorActionButton(

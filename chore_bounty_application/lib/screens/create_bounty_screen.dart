@@ -103,6 +103,8 @@ class _CreateBountyState extends State<CreateBounty> {
 
       if (_dueDate != null) {
         payload['due_at'] = _dueDate!.toIso8601String();
+      } else if (widget.isEditing) {
+        payload['due_at'] = null;
       }
 
       if (widget.currentHouseholdId != null) {
@@ -149,7 +151,7 @@ class _CreateBountyState extends State<CreateBounty> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          widget.isEditing ? 'Edit Bounty' : 'Create Bounty',
+          widget.isEditing ? 'Edit Chore' : 'Create Chore',
           style: const TextStyle(
             color: Color(0xFF1E293B),
             fontSize: 19,
@@ -268,7 +270,7 @@ class _CreateBountyState extends State<CreateBounty> {
                           ),
                         )
                       : Text(
-                          widget.isEditing ? 'Save Changes' : 'Post Bounty',
+                          widget.isEditing ? 'Save Changes' : 'Post Chore',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,

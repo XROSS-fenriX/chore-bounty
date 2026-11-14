@@ -262,7 +262,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Join your roommates and start earning bounties.',
+                            'Join your roommates and start completing chores.',
                             style: GoogleFonts.nunito(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,

@@ -32,14 +32,27 @@ class BountyPolicy
             : Response::deny('You must belong to this household to create bounties.');
     }
 
+    private function isAvailableOrTaken(Bounty $bounty): bool
+    {
+        if (in_array($bounty->status, ['claimed', 'in_progress'], true)) {
+            return true;
+        }
+
+        if ($bounty->status === 'open') {
+            return $bounty->due_at === null || $bounty->due_at->isFuture();
+        }
+
+        return false;
+    }
+
     public function update(User $user, Bounty $bounty): Response
     {
         if ($bounty->created_by !== $user->id) {
             return Response::deny('Only the bounty creator can update this quest.');
         }
 
-        if ($bounty->status !== 'open') {
-            return Response::deny('Cannot edit a bounty that is already in progress or completed.');
+        if (! $this->isAvailableOrTaken($bounty)) {
+            return Response::deny('Chores can only be edited when available or taken.');
         }
 
         return Response::allow();
@@ -47,9 +60,9 @@ class BountyPolicy
 
     public function delete(User $user, Bounty $bounty): Response
     {
-        return ($bounty->created_by === $user->id && $bounty->status === 'open')
+        return ($bounty->created_by === $user->id && $this->isAvailableOrTaken($bounty))
             ? Response::allow()
-            : Response::deny('Only open bounties can be deleted by their creator.');
+            : Response::deny('Chores can only be deleted by their creator when available or taken.');
     }
 
     public function claim(User $user, Bounty $bounty): Response

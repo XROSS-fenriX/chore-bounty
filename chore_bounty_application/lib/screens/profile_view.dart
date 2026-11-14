@@ -93,12 +93,12 @@ class ProfileView extends StatelessWidget {
             joinedAt: member?.joinedAt,
             isCurrentUser: false,
             onAvatarTap: onEditProfile,
-          ),
-          const SizedBox(height: 16),
-          UserProfileStatsRow(
-            rank: leaderboardEntry?.rank,
-            totalTokens: _effectivePoints,
-            completedCount: _effectiveCompletedCount,
+            statsRow: UserProfileStatsRow(
+              rank: leaderboardEntry?.rank,
+              totalTokens: _effectivePoints,
+              completedCount: _effectiveCompletedCount,
+              standalone: false,
+            ),
           ),
           const SizedBox(height: 22),
           UserChoreActivitySection(

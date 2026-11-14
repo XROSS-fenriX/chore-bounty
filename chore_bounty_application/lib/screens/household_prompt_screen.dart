@@ -187,7 +187,7 @@ class _HouseholdPromptScreenState extends State<HouseholdPromptScreen> {
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 8),
                       child: Text(
-                        'Create bounties for shared chores among roommates. Choose whether to create a new household or join an existing one with an invite code.',
+                        'Coordinate shared chores among roommates. Choose whether to create a new household or join an existing one with an invite code.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Color(0xFF64748B),
@@ -527,7 +527,7 @@ class _HouseholdPromptScreenState extends State<HouseholdPromptScreen> {
 
           // Submit Action Button
           _buildSubmitButton(
-            label: 'Create Guild',
+            label: 'Create Household',
             icon: Icons.add_circle_outline_rounded,
             onPressed: isBusy ? null : handleCreate,
           ),
@@ -587,7 +587,7 @@ class _HouseholdPromptScreenState extends State<HouseholdPromptScreen> {
             ),
             cursorColor: const Color(0xFF1B8354),
             decoration: InputDecoration(
-              hintText: 'e.g. GUILD4B or APT4B123',
+              hintText: 'e.g. HOUSE4B or APT4B123',
               hintStyle: const TextStyle(
                 fontSize: 14.5,
                 color: Color(0xFF94A3B8),

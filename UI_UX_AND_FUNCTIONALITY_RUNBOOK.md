@@ -1,197 +1,119 @@
-# ChoreBounty Application Analysis, Bug Audit & Minimalist UI/UX Runbook
+# ChoreBounty System Analysis & Feature Implementation Runbook
 
-**Date:** November 12, 2026  
-**Scope:** Flutter Client (`d:\www\chore-bounty\chore_bounty_application`) & Laravel API Integration (`d:\www\chore-bounty\chore-bounty-api`)  
-**Objective:** Document all bugs, missing functionalities, and cluttered UI layouts across the application, and provide a phased runbook to resolve them while upgrading the interface into a cleaner, minimalist layout with improved user experience.
-
----
-
-## 1. Executive Summary
-
-A full-stack audit of the Flutter application and its integration with the Laravel 12 REST API identified **5 functional bugs**, **5 missing end-user capabilities** (several of which already have working backend endpoints that are unexposed in the Flutter UI), and **6 cluttered UI/UX areas**.
-
-This runbook organizes the findings by severity and provides a 4-phase implementation plan that:
-1. Fixes functional bugs and state synchronization issues.
-2. Connects unexposed backend capabilities (`reject` submission proof, guild rename, member removal, invite-code copy, and pending review notifications).
-3. Declutters high-density screens (`DashboardView`, `ChoresView`, `BountyDetailScreen`, `HouseholdView`, and `ProfileView`) while preserving the minimalist `#FAF8F5` / `#1B8354` aesthetic and maintaining full compatibility with the existing 35-test widget and model test suite.
+**Date:** November 13, 2026  
+**Scope:** Laravel 13 REST API (`chore-bounty-api`) & Flutter 3.10 Mobile Client (`chore_bounty_application`)
 
 ---
 
-## 2. Identified Bugs & Logic Defects
+## 1. System Architecture Analysis
 
-### BUG-01: Notification Bell Opens Household Switcher Instead of Notifications
-- **Location:** `lib/screens/home_shell.dart` (lines 923–931) & `lib/screens/dashboard_view.dart` (lines 97–111)
-- **Observation:** `DashboardView` calculates `pendingReviews` (bounties created by the current user with `status == 'submitted'`) and displays a red notification dot on the bell icon in `DashboardHeader`. However, `HomeShell.questBoard()` wires `onNotificationTap: openHouseholdSwitcher`.
-- **Impact:** Tapping the notification bell when a roommate submits a chore for review opens the `My Households` switcher modal instead of showing the submitted bounties awaiting the creator's approval.
-- **Fix:** Replace `onNotificationTap` in `HomeShell` with a dedicated `openNotificationsSheet` bottom sheet that lists all bounties awaiting the current user's verification (`status == 'submitted'`) and active tasks due soon, allowing one-tap navigation to `BountyDetailScreen`.
+ChoreBounty uses a two-tier architecture:
+1. **Backend API (`chore-bounty-api`)**: Laravel 13 with Sanctum token authentication, MySQL persistence (`chore_bounty_db`), Eloquent models (`User`, `Household`, `HouseholdUser`, `Bounty`, `BountyClaim`, `BountyCompletion`, `RewardRedemption`, `BountyNotification`), and policy-based authorization (`BountyPolicy`, `HouseholdPolicy`, `UserPolicy`).
+2. **Mobile Client (`chore_bounty_application`)**: Flutter 3.10 application using `Dio` (`ApiClient`), `FlutterSecureStorage` (`TokenStorage`), service classes (`AuthService`, `BountyService`, `HouseholdService`), and five primary navigation views inside `HomeShell` (`DashboardView`, `ChoresView`, `LeaderboardView`, `HouseholdView`, `ProfileView`).
 
-### BUG-02: `DashboardBountyCard`Fabricates a Fake Deadline When `dueAt` Is Null
-- **Location:** `lib/widgets/dashboard/dashboard_bounty_card.dart` (lines 33–45)
-- **Observation:** When a bounty is created without an optional due date (`dueAt == null`), `_formatTimeLeft()` synthesizes an artificial deadline (`createdAt + 2 days` or `now + 1 day 23 hours`) and displays a blue countdown chip on the card, whereas `BountyDetailScreen` (`_formatScheduleDate`, line 169) accurately displays `'No due date'`.
-- **Impact:** Users see a misleading countdown timer on the dashboard/bounties list for chores that actually have no deadline.
-- **Fix:** When `bounty.dueAt == null` and `bounty.createdAt == null`, or when displaying open bounties without a due date in contexts that do not require a countdown, ensure consistent handling while preserving existing countdown behavior for bounties with `dueAt` or `createdAt` tested in `widget_test.dart`.
-
-### BUG-03: Silent Refresh Failure on `HomeShell.refreshBounties()`
-- **Location:** `lib/screens/home_shell.dart` (lines 147–178)
-- **Observation:** `refreshBounties()` catches all network/API exceptions silently (`catch (_) {}`) without surfacing a non-intrusive retry snackbar or error state when the API is unreachable.
-- **Impact:** If a pull-to-refresh or household switch fails due to a transient connection drop, the UI silently displays stale or empty data.
-- **Fix:** Surface a concise error snackbar when `refreshBounties()` fails on manual refresh while keeping initial load resilient.
-
-### BUG-04: `EditProfileScreen` Resets `currentHousehold` Member List Display Until Next Full Reload
-- **Location:** `lib/screens/home_shell.dart` (lines 1037–1040)
-- **Observation:** When a user updates their first/middle/last name, gender, or avatar in `ProfileView`, `onUserUpdated` updates `_currentUser` in `HomeShell`, but does not refresh `_householdMembers` or `_leaderboard`.
-- **Impact:** Navigating to the `Guild` (`HouseholdView`) or `Leaderboard` tab immediately after editing the profile still shows the old name and avatar until a manual pull-to-refresh is triggered.
-- **Fix:** Trigger `refreshBounties()` inside `onUserUpdated` in `HomeShell` so leaderboard entries, bounty cards, and guild member lists reflect the updated name and avatar immediately.
-
-### BUG-05: `BountyActionController@complete` Does Not Create `RewardRedemption` Record
-- **Location:** `chore-bounty-api/app/Http/Controllers/BountyActionController.php` (lines 108–178)
-- **Observation:** When a creator approves a bounty via `POST /api/bounties/{bounty}/verify` or `POST /api/bounties/{bounty}/complete`, `BountyCompletion` is marked `approved`, but no initial `RewardRedemption` record (`unredeemed`) is automatically created unless the claimant separately calls `POST /api/completions/{bountyCompletion}/redemption`.
-- **Impact:** Approved completions do not automatically appear in `GET /api/redemptions` for the earner.
-- **Fix:** Use `firstOrCreate` on `$completion->redemption()` inside `BountyActionController@verify` and `BountyActionController@complete` when a completion is approved.
+### Identified Gaps Addressed by This Runbook
+1. **Real-Time Lifecycle Notifications**: The system previously synthesized read-only items from in-memory bounties and lacked persistent event tracking or real-time updates for `posted`, `cancelled`, `claimed`, `submitted`, and `awarded` actions.
+2. **Notifications Page Wireframe & Read State**: `NotificationsScreen` lacked date-grouped dividers (`────── Date ──────`), the `Mark all read` header button, circular category icons inside each notification card, and tap-to-mark-read state persistence.
+3. **Chore Approval Modal**: Approving a chore in `BountyDetailScreen` showed only a transient snackbar instead of a confirmation modal detailing the approved chore and token reward.
+4. **Ready for Approval Section**: Neither `DashboardView` nor `ChoresView` surfaced a dedicated `Ready for Approval` section when a roommate submitted a chore for review.
+5. **Chore Details Edit & Delete Rules**: `BountyDetailScreen` and `BountyPolicy` allowed editing/deleting only when `status == 'open'` (including overdue chores) and blocked the creator from editing or deleting a `Taken` (`claimed`) chore.
 
 ---
 
-## 3. Missing Functionalities
-
-### FEAT-01: Reject / Request Redo on Submitted Bounty Proof
-- **Backend Status:** Implemented at `POST /api/bounties/{bounty}/reject` (`BountyActionController@reject`, line 180), which transitions a `submitted` bounty back to `claimed` and marks the pending `BountyCompletion` as `rejected`.
-- **Frontend Gap:**
-  - `BountyService` (`lib/services/bounty_service.dart`) lacks a `reject(String id, {String? comment})` method.
-  - `BountyDetailScreen` (`lib/screens/bounty_detail_screen.dart`, lines 1042–1061) only renders the green `Approve & Disburse Reward` button when `_bounty.isSubmitted && _isCreator`.
-- **Planned Implementation:**
-  - Add `Future<void> reject(String id, {String? comment})` to `BountyService`.
-  - In `BountyDetailScreen`, when `_bounty.isSubmitted && _isCreator`, render a clean secondary `Request Redo` / `Reject` outlined button alongside `Approve & Disburse Reward` so creators can return incomplete chores to the assignee.
-
-### FEAT-02: Quick "Post a Bounty" Action When Bounty List Is Non-Empty
-- **Frontend Gap:**
-  - In `DashboardView` (`lib/screens/dashboard_view.dart`) and `ChoresView` (`lib/screens/chores_view.dart`), the `+ Post a Bounty` button only appears inside the empty state box (`DashboardChoreList` when `bounties.isEmpty`).
-  - Once a household has at least one bounty, users must open the Hamburger Drawer every time they want to post a new bounty.
-- **Planned Implementation:**
-  - Add a compact, minimalist `+ Post` pill action button in the `Bounties` (`ChoresView`) header trailing slot (`PageMenuHeader.trailing`) and on the `Available Chores` section header row in `DashboardView`.
-
-### FEAT-03: Guild (`HouseholdView`) Invite Code Copy & Owner Management Actions
-- **Backend Status:**
-  - `PUT /api/households/{household}` (`HouseholdController@update`) renames a guild (owner only), and `HouseholdService.update(int householdId, String name)` already exists in `lib/services/household_service.dart` (line 54) but is unused in the UI.
-  - `DELETE /api/households/{household}/members/{user}` (`HouseholdUserController@destroy`, line 57) removes a non-owner member from the guild (owner only).
-- **Frontend Gap:**
-  - In `HouseholdView` (`lib/screens/household_view.dart`, lines 231–239), the guild invite code (`Code: ${household.inviteCode}`) is plain non-interactive text with no copy-to-clipboard button.
-  - Guild owners cannot rename their guild or remove a member from `HouseholdView`.
-- **Planned Implementation:**
-  - Make the invite code pill in `HouseholdView` tappable with a copy icon that copies `household.inviteCode` to `Clipboard` and shows a confirmation snackbar.
-  - Add `removeMember(int householdId, int userId)` to `HouseholdService`.
-  - Allow the guild owner (`household.isOwner`) to rename the guild via an edit icon button on the Guild summary card and remove non-owner members via a subtle action menu on member tiles.
-
-### FEAT-04: Search & Sort Controls on Bounties (`ChoresView`)
-- **Frontend Gap:**
-  - As household bounties accumulate, `ChoresView` only filters by tab (`Available`, `In Progress`, `Completed`, `Posted by Me`) with no keyword search or reward/due-date sorting.
-- **Planned Implementation:**
-  - Add a minimal collapsible search/sort bar or lightweight search field in `ChoresView` when browsing bounties, allowing instant filtering by title/category.
-
-### FEAT-05: Actionable Pending Review Banner / Notification Sheet on `DashboardView`
-- **Frontend Gap:**
-  - When a roommate submits proof on a bounty posted by the current user, the bounty sits inside `Posted by Me -> Taken` on `ChoresView` without any visual indicator on `DashboardView` other than the 7px red dot on the bell icon.
-- **Planned Implementation:**
-  - Wire the bell icon to a clean `Notifications & Pending Reviews` bottom sheet in `HomeShell`, showing submitted bounties awaiting review and claimed bounties due today.
-
----
-
-## 4. Cluttered UI Layouts & Minimalist UX Upgrade Plan
-
-All visual upgrades strictly follow the established minimalist design system:
-- **Canvas Background:** `#FAF8F5` (Warm alabaster)
-- **Surface / Card Fill:** `#FFFFFF` with `1.2px–1.5px` `#E2E8F0` border and subtle elevation (`Colors.black.withAlpha(6)`)
-- **Primary Accent:** `#1B8354` (Emerald green), `#13603D` (Deep forest border), `#E8F5EE` (Soft mint highlight)
-- **Typography:** `#0F172A` primary ink, `#475569` secondary slate, `#64748B` muted metadata
-
-### UI-01: `ProfileView` Vertical Clutter (`lib/screens/profile_view.dart`)
-- **Problem:** `ProfileView` stacks 5 heavy sections vertically in a single scroll view (`UserProfileHeaderCard`, `UserProfileStatsRow`, `UserChoreActivitySection` with full bounty cards, `My Households` with full multi-row action cards for every guild, and a `Log out` button), requiring excessive scrolling.
-- **Minimalist Upgrade:**
-  - Refine `My Households` cards in `ProfileView` into a cleaner, compact list layout where each household card groups the guild name, `ACTIVE` badge, tap-to-copy invite code chip, and inline `Switch` / `Leave Household` actions cleanly with reduced vertical padding.
-  - Keep all required widget test labels (`My Households`, `ACTIVE`, `Switch`, `Leave Household`, `Log out`, `Chore Activity`) intact.
-
-### UI-02: `BountyDetailScreen` Card Density & Action Bar (`lib/screens/bounty_detail_screen.dart`)
-- **Problem:** `BountyDetailScreen` renders four separate bordered white boxes (`Top Summary`, `Description`, `Submission Note / Proof`, `Details`, and `Claimed by / Completed by`) with heavy `18px` padding and `1.5px` borders, making the screen feel boxy and segmented.
-- **Minimalist Upgrade:**
-  - Refine card border widths (`1.2px` `#E2E8F0`), unify section header typography, add subtle icon containers for the `Details` rows (Due Date & Category), and add a clean bottom action bar separator with support for both `Approve & Disburse Reward` and `Request Redo` when reviewing submitted proof.
-
-### UI-03: `HouseholdView` (`Guild`) Header Card & Member Tile Hierarchy (`lib/screens/household_view.dart`)
-- **Problem:** The top Guild card in `HouseholdView` packs the `home_icon.png` image, household title, member count pill, and plain-text invite code tightly together without interactive affordances, and member tiles place token/bounty counters in a cramped right column.
-- **Minimalist Upgrade:**
-  - Upgrade the Guild summary card with a clean interactive invite-code chip (with copy icon) and an owner edit button.
-  - Refine member tiles with balanced spacing, clear role badges (`Owner` / `Member`), and clean token/bounty stat pills while preserving `assets/images/home_icon.png`, `'Roommates'`, `'3 members'`, `'150 tokens'`, and `'3 bounties'` text nodes expected by tests.
-
-### UI-04: `DashboardView` Section Headers & Filter Track (`lib/screens/dashboard_view.dart` & `lib/widgets/dashboard/dashboard_filter_pills.dart`)
-- **Problem:** On `DashboardView`, the 3-tab filter bar (`All`, `Available`, `My Tasks`) floats directly on the `#FAF8F5` background without a subtle segmented track container, and section headers (`Available Chores`, `My Chores`) lack item count badges or quick action affordances.
-- **Minimalist Upgrade:**
-  - Wrap the non-scrollable `DashboardFilterPills` in a subtle `#F1F5F9` / `#FFFFFF` segmented pill track with `1px` `#E2E8F0` border so inactive tabs look grounded.
-  - Add subtle count pills and a compact `+ Post` action on the `Available Chores` header row.
-
-### UI-05: `ChoresView` (`Bounties`) Status Filter Bar (`lib/screens/chores_view.dart`)
-- **Problem:** When `'Posted by Me'` is selected, the secondary `Status` dropdown bar uses a full-width white card (`padding: 14, vertical: 6`) that visually competes with the bounty cards below it.
-- **Minimalist Upgrade:**
-  - Refine the `Posted by Me` secondary status bar into a sleek, compact inline filter row (`height: 44`) and add a `+ Post` button to the `PageMenuHeader` trailing slot so users can create a bounty directly from the `Bounties` screen at any time.
-
-### UI-06: `LeaderboardView` Podium & List Spacing (`lib/screens/leaderboard_view.dart` & `lib/widgets/leaderboard/leaderboard_podium.dart`)
-- **Problem:** Podium cards use heavy colored drop shadows (`withAlpha(80)`) that clash slightly with the flat minimalist design of the rest of the app.
-- **Minimalist Upgrade:**
-  - Soften podium shadows and refine border contrast while preserving exact relative heights (`minHeight: 198 / 168 / 142`) and text positions verified by `widget_test.dart`.
-
----
-
-## 5. Phased Implementation Plan
+## 2. Feature Specifications & Runbook
 
 ```mermaid
-flowchart LR
-    P1["Phase 1: Backend & Service Layer"] --> P2["Phase 2: Core Workflow Fixes & Notifications"]
-    P2 --> P3["Phase 3: Guild & Bounty Lifecycle Actions"]
-    P3 --> P4["Phase 4: Minimalist UI/UX Polish & Verification"]
+flowchart TD
+    A["User Action: Post / Cancel / Claim / Submit / Award"] --> B["Laravel API Controller"]
+    B --> C["BountyNotification::dispatchForHousehold()"]
+    C --> D["bounty_notifications Table"]
+    D --> E["GET /api/notifications + 4s Real-Time Poll"]
+    E --> F["HomeShell Live Toast & Bell Badge"]
+    E --> G["NotificationsScreen (Date Groups + Mark Read)"]
 ```
 
-### Phase 1: Backend & Frontend Service Layer Completion
-1. **Backend (`chore-bounty-api`)**:
-   - Update `app/Http/Controllers/BountyActionController.php` (`verify` and `complete`) to automatically create an `unredeemed` `RewardRedemption` record when a `BountyCompletion` is approved.
-2. **Frontend Services (`chore_bounty_application`)**:
-   - Add `Future<void> reject(String id, {String? comment})` to `lib/services/bounty_service.dart` calling `POST /bounties/$id/reject`.
-   - Add `Future<void> removeMember(int householdId, int userId)` to `lib/services/household_service.dart` calling `DELETE /households/$householdId/members/$userId`.
+### Feature 1: Real-Time Notifications for Posted, Cancel, Claim, Submit, and Award
+- **Backend Persistence**:
+  - Migration: `database/migrations/2026_11_13_000000_create_bounty_notifications_table.php` creates `bounty_notifications` with `household_id`, `bounty_id`, `user_id`, `actor_id`, `event_type`, `event_name`, `description`, `category`, `is_read`, and `read_at`.
+  - Model: `app/Models/BountyNotification.php` provides `dispatchForHousehold()` to fan out notifications to all household members.
+  - Event Hooks:
+    - **Posted (`posted`)**: `BountyController@store` dispatches `Chore Posted`.
+    - **Cancelled (`cancelled`)**: `BountyActionController@cancel` dispatches `Chore Cancelled`.
+    - **Claimed (`claimed`)**: `BountyActionController@claim` dispatches `Chore Claimed`.
+    - **Submitted (`submitted`)**: `BountyActionController@submit` dispatches `Chore Submitted`.
+    - **Awarded (`awarded`)**: `BountyActionController@verify` and `BountyActionController@complete` dispatch `Bounty Awarded`.
+  - Endpoints (`app/Http/Controllers/NotificationController.php` & `routes/api.php`):
+    - `GET /api/notifications`: Lists household notifications for the authenticated user with `meta.unread_count`.
+    - `POST /api/notifications/{notification}/read`: Marks a single notification as read.
+    - `POST /api/notifications/read-all`: Marks all notifications in the household as read.
+- **Frontend Real-Time Sync**:
+  - `lib/models/app_notification.dart` models notification records and provides `deriveFromBounties()` fallback support.
+  - `lib/services/bounty_service.dart` implements `notifications()`, `markNotificationRead()`, and `markAllNotificationsRead()`.
+  - `lib/screens/home_shell.dart` polls `/api/notifications` and `/api/bounties` every 4 seconds in live runtime, updates the unread badge count on `DashboardHeader`, and displays a floating notification banner when a new event arrives.
 
-### Phase 2: Bug Fixes & Notification Sheet (`HomeShell` & `DashboardView`)
-1. **Fix Notification Bell (`BUG-01` & `FEAT-05`)**:
-   - Implement `openNotificationsSheet()` in `lib/screens/home_shell.dart` displaying:
-     - **Awaiting Your Approval**: Submitted bounties created by `_currentUser` (`b.isSubmitted && b.creatorId == _currentUser.id.toString()`).
-     - **Your Ongoing Tasks**: Claimed bounties assigned to `_currentUser` (`b.isClaimed && b.assigneeId == _currentUser.id.toString()`).
-   - Wire `DashboardView.onNotificationTap` in `HomeShell.questBoard()` to `openNotificationsSheet` instead of `openHouseholdSwitcher`.
-2. **Fix Profile Update Sync (`BUG-04`)**:
-   - Call `refreshBounties()` inside `ProfileView.onUserUpdated` in `lib/screens/home_shell.dart`.
-3. **Add Quick `+ Post` Action (`FEAT-02`)**:
-   - Add a compact `+ Post` button to `ChoresView` (`PageMenuHeader.trailing`) and `DashboardView` (`Available Chores` header row).
+### Feature 2: Notifications Page Layout & Mark as Read
+- **File**: `lib/screens/notifications_screen.dart`
+- **Layout Structure**:
+  - **Header**: Back button (`<`), `Notifications` title on the left with seamless canvas background matching the body (`#FAF8F5`), zero elevation, and border below the header removed.
+  - **Action Button**: `Mark all read` button styled with solid primary green background (`#1B8354`) and bold white font (`#FFFFFF`).
+  - **Date Divider**: Groups notifications by date (`Today`, `Yesterday`, or `MMM D, YYYY`) between subtle `#E2E8F0` divider bars.
+  - **Notification Card**: Rounded bordered card styled with consistent `#E2E8F0` 1.2px borders and soft shadow containing:
+    - **Left**: Circular icon container (`BoxShape.circle`) with 1.2px `#E2E8F0` border rendering `CategoryIconWidget` for the chore's category.
+    - **Right**: `Event Name` on top and `Description` underneath, with an unread dot indicator.
+  - **Interaction**: Pressing any notification card immediately marks it as read (`POST /api/notifications/{id}/read`) and updates its visual state. Pressing `Mark all read` marks all notifications as read (`POST /api/notifications/read-all`).
 
-### Phase 3: Bounty Review & Guild Management (`BountyDetailScreen` & `HouseholdView`)
-1. **Reject / Request Redo in `BountyDetailScreen` (`FEAT-01`)**:
-   - Add `_handleReject()` to `lib/screens/bounty_detail_screen.dart`.
-   - When `_bounty.isSubmitted && _isCreator`, display both `Approve & Disburse Reward` (primary green button) and `Request Redo` (secondary outlined button).
-2. **Guild Invite Copy, Rename & Member Removal in `HouseholdView` (`FEAT-03`)**:
-   - Make the invite code pill in `lib/screens/household_view.dart` tappable to copy `household.inviteCode` to clipboard with feedback.
-   - Add an edit guild name dialog for guild owners (`household.isOwner`) wired to `HouseholdService.update`.
-   - Add a remove-member confirmation action for guild owners on non-owner member rows wired to `HouseholdService.removeMember`.
+### Feature 3: Chore Approval Confirmation Modal
+- **File**: `lib/screens/bounty_detail_screen.dart` (`_handleVerify`)
+- **Behavior**:
+  - When the chore creator taps `Approve & Disburse Reward`, the app calls `POST /api/bounties/{id}/verify`, refreshes the household state, and presents a modal dialog (`Chore Approved!`).
+  - The modal displays the verified badge icon, the approved chore title, the roommate who completed the chore, a `+N Tokens Awarded` pill, and a `Done` button that closes the modal and returns to the previous screen.
 
-### Phase 4: Minimalist UI Layout Polish & Regression Testing
-1. **Apply Minimalist Layout Refinements (`UI-01` through `UI-06`)**:
-   - Refine `DashboardFilterPills` segmented container, `DashboardView` section headers, `ChoresView` status bar, `BountyDetailScreen` card borders/spacing, `HouseholdView` summary card, `LeaderboardPodiumSection` elevation, and `ProfileView` household cards.
-2. **Test Suite & Live Deployment Verification**:
-   - Run `php artisan test` in `d:\www\chore-bounty\chore-bounty-api`.
-   - Run `flutter analyze` and `flutter test` in `d:\www\chore-bounty\chore_bounty_application` (plus new unit/widget tests for notification sheet, bounty rejection, and guild management).
-   - Build and deploy the updated debug APK to the running Android emulator (`emulator-5554`).
+### Feature 4: "Ready for Approval" Section in Dashboard and Chore Page
+- **Files**: `lib/screens/dashboard_view.dart` & `lib/screens/chores_view.dart`
+- **Behavior**:
+  - Both screens compute `_readyForApprovalChores` (`_isPostedByMe(b) && b.isSubmitted`).
+  - Whenever one or more chores are submitted and awaiting the current user's review, both `DashboardView` and `ChoresView` render the `Ready for Approval` section above the chore list with a count badge and interactive `DashboardBountyCard` items.
+
+### Feature 5: Edit and Delete Chores Only When Available or Taken
+- **Backend Policy**: `app/Policies/BountyPolicy.php`
+  - `isAvailableOrTaken(Bounty $bounty)` returns `true` only when:
+    - `$bounty->status === 'open'` and `$bounty->due_at` is null or in the future (**Available**), OR
+    - `$bounty->status` is in `['claimed', 'in_progress']` (**Taken**).
+  - `update()` and `delete()` allow the creator to edit or delete a chore only when `isAvailableOrTaken($bounty)` is true, returning `403 Forbidden` for `submitted`, `completed`, `cancelled`, or overdue chores.
+- **Frontend Screen**: `lib/screens/bounty_detail_screen.dart`
+  - `_buildActionButton()` renders the creator's `Edit`, `Cancel`, and `Delete` action row when `(_bounty.isAvailable || _bounty.isClaimed) && _isCreator`.
+  - Hides `Edit` and `Delete` when the chore is `submitted`, `completed`, `cancelled`, or `pastDue`.
+
+### Feature 6: Filter Notifications to Only Show Actions Triggered or Posted by Other Users
+- **Backend Enforcement**:
+  - `app/Models/BountyNotification.php`: In `dispatchForHousehold()`, the recipient list filters out `$actor->id` (`fn ($id) => (int) $id !== (int) $actor->id`), preventing notification rows from being created for the actor who performed the action.
+  - `app/Http/Controllers/NotificationController.php`: `index()` and `markAllAsRead()` enforce `where(fn ($q) => $q->whereNull('actor_id')->orWhere('actor_id', '!=', $user->id))` as a defense-in-depth query filter.
+- **Frontend Enforcement**:
+  - `lib/models/app_notification.dart`: `isTriggeredBy(userId, userName)` detects self-triggered records. `deriveFromBounties()` excludes self-posted or self-updated bounties when deriving fallback notifications.
+  - `lib/services/bounty_service.dart`: `notifications()` accepts `currentUserId` and `currentUserName` and strips self-triggered entries before returning.
+  - `lib/screens/notifications_screen.dart`: Filters incoming and initial notification lists so self-triggered entries are never displayed.
+  - `lib/screens/home_shell.dart`: Filters notifications for unread badge counts, polling updates, and toast alerts, ensuring notifications and toasts only trigger for other household members' actions.
 
 ---
 
-## 6. Verification Checklist
+## 3. Verification & Deployment Steps
 
-- [ ] `php artisan test` passes all feature and security tests in `chore-bounty-api`.
-- [ ] `flutter analyze` reports `No issues found!`.
-- [ ] `flutter test` passes all existing 35 tests + newly added tests for notification sheet, reject workflow, and guild actions.
-- [ ] Tapping the notification bell on `DashboardView` opens the `Notifications` sheet instead of `My Households`.
-- [ ] Creators viewing a `submitted` bounty on `BountyDetailScreen` can both `Approve & Disburse Reward` and `Request Redo`.
-- [ ] Users can post a bounty directly from `DashboardView` and `Bounties` (`ChoresView`) even when the bounty list is non-empty.
-- [ ] Guild members can copy the guild invite code with one tap on `HouseholdView`, and guild owners can rename the guild.
-- [ ] Updated APK is built and deployed to `emulator-5554`.
-
+1. **Backend Database Migration & Tests**:
+   ```powershell
+   cd d:\www\chore-bounty\chore-bounty-api
+   php artisan migrate
+   php artisan test
+   ```
+2. **Frontend Static Analysis & Widget Tests**:
+   ```powershell
+   cd d:\www\chore-bounty\chore_bounty_application
+   flutter analyze
+   flutter test
+   ```
+3. **Emulator Deployment**:
+   ```powershell
+   cd d:\www\chore-bounty\chore_bounty_application
+   flutter build apk --debug --target-platform android-x64
+   adb -s emulator-5554 install -r build\app\outputs\flutter-apk\app-debug.apk
+   adb -s emulator-5554 shell am start -n com.example.chore_bounty_application/.MainActivity
+   ```

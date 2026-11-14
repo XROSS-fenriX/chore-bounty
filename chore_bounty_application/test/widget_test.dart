@@ -4,6 +4,7 @@ import 'package:chore_bounty_application/main.dart';
 import 'package:chore_bounty_application/core/api_client.dart';
 import 'package:chore_bounty_application/core/token_storage.dart';
 import 'package:chore_bounty_application/models/app_user.dart';
+import 'package:chore_bounty_application/models/app_notification.dart';
 import 'package:chore_bounty_application/models/bounty.dart';
 import 'package:chore_bounty_application/models/household.dart';
 import 'package:chore_bounty_application/models/household_member.dart';
@@ -17,6 +18,7 @@ import 'package:chore_bounty_application/widgets/avatar/user_avatar_widget.dart'
 import 'package:chore_bounty_application/widgets/ui.dart';
 import 'package:chore_bounty_application/widgets/bounty_form/bounty_category_icons.dart';
 import 'package:chore_bounty_application/widgets/dashboard/dashboard_bounty_card.dart';
+import 'package:chore_bounty_application/widgets/dashboard/dashboard_filter_pills.dart';
 import 'package:chore_bounty_application/widgets/dashboard/dashboard_header.dart';
 import 'package:chore_bounty_application/widgets/dashboard/dashboard_illustrations.dart';
 import 'package:chore_bounty_application/widgets/dashboard/dashboard_summary_card.dart';
@@ -315,8 +317,8 @@ void main() {
 
     await tester.pump();
 
-    // Verify title 'Bounty Details' on AppBar
-    expect(find.text('Bounty Details'), findsOneWidget);
+    // Verify title 'Chore Details' on AppBar
+    expect(find.text('Chore Details'), findsOneWidget);
 
     // Verify chore title, category icon and poster name
     expect(find.text('Do the laundry'), findsOneWidget);
@@ -328,8 +330,8 @@ void main() {
     expect(find.text('Description'), findsOneWidget);
     expect(find.text('Wash sheets and clothes in warm water.'), findsOneWidget);
 
-    // Verify bottom action button: 'Claim This Bounty'
-    expect(find.text('Claim This Bounty'), findsOneWidget);
+    // Verify bottom action button: 'Claim This Chore'
+    expect(find.text('Claim This Chore'), findsOneWidget);
   });
 
   testWidgets('BountyDetailScreen renders schedule due date with calendar icon and category with tag icon',
@@ -1059,8 +1061,8 @@ void main() {
     );
     await tester.pump();
 
-    // Renamed to Bounties (no My Tasks title) and reuses DashboardBountyCard
-    expect(find.text('Bounties'), findsOneWidget);
+    // Renamed to Chores (no My Tasks title) and reuses DashboardBountyCard
+    expect(find.text('Chores'), findsOneWidget);
     expect(find.textContaining('My Tasks'), findsNothing);
     expect(find.byType(DashboardBountyCard), findsOneWidget);
 
@@ -1068,60 +1070,59 @@ void main() {
     expect(find.text('Buy milk'), findsOneWidget);
     expect(find.text('Water plants'), findsNothing);
     expect(find.text('Sweep hallway'), findsNothing);
-    expect(find.text('Status'), findsNothing);
+    // Pill filters row is hidden when Available is selected
+    expect(find.byType(DashboardFilterPills), findsNothing);
 
-    // 2. 'In Progress' filter -> active chores posted by OTHER users claimed by currentUser ('Sweep hallway')
-    await tester.tap(find.text('In Progress'));
+    // 2. 'In Progress' filter via dropdown -> active chores posted by OTHER users claimed by currentUser ('Sweep hallway')
+    await tester.tap(find.byType(DropdownButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('In Progress').last);
     await tester.pumpAndSettle();
     expect(find.byType(DashboardBountyCard), findsOneWidget);
     expect(find.text('Sweep hallway'), findsOneWidget);
     expect(find.text('Do the laundry'), findsNothing);
+    expect(find.byType(DashboardFilterPills), findsNothing);
 
-    // 3. 'Completed' filter -> completed chores posted by OTHER users only ('Cook breakfast', not 'Clean the room')
-    await tester.tap(find.text('Completed'));
-    await tester.pumpAndSettle();
-    expect(find.byType(DashboardBountyCard), findsOneWidget);
-    expect(find.text('Cook breakfast'), findsOneWidget);
-    expect(find.text('Clean the room'), findsNothing);
-
-    // 4. 'Posted by Me' filter -> creatorId == '1' + shows secondary Status dropdown filter
-    await tester.ensureVisible(find.text('Posted by Me'));
-    await tester.tap(find.text('Posted by Me'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Status'), findsOneWidget);
-    expect(find.byType(DropdownButton<String>), findsOneWidget);
-    expect(find.text('All'), findsOneWidget);
-    expect(find.byType(DashboardBountyCard), findsNWidgets(4));
-
-    // Dropdown -> 'Available'
-    await tester.tap(find.byType(DropdownButton<String>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Available').last);
-    await tester.pumpAndSettle();
-    expect(find.byType(DashboardBountyCard), findsOneWidget);
-    expect(find.text('Water plants'), findsOneWidget);
-
-    // Dropdown -> 'Taken'
-    await tester.tap(find.byType(DropdownButton<String>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Taken').last);
-    await tester.pumpAndSettle();
-    expect(find.byType(DashboardBountyCard), findsOneWidget);
-    expect(find.text('Do the laundry'), findsOneWidget);
-
-    // Dropdown -> 'Completed'
+    // 3. 'Completed' filter via dropdown -> completed chores posted by OTHER users only ('Cook breakfast', not 'Clean the room')
     await tester.tap(find.byType(DropdownButton<String>));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Completed').last);
     await tester.pumpAndSettle();
     expect(find.byType(DashboardBountyCard), findsOneWidget);
-    expect(find.text('Clean the room'), findsOneWidget);
+    expect(find.text('Cook breakfast'), findsOneWidget);
+    expect(find.text('Clean the room'), findsNothing);
+    expect(find.byType(DashboardFilterPills), findsNothing);
 
-    // Dropdown -> 'Cancelled'
+    // 4. 'Posted by Me' filter via dropdown -> shows pill filters row
     await tester.tap(find.byType(DropdownButton<String>));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Cancelled').last);
+    await tester.tap(find.text('Posted by Me').last);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DashboardFilterPills), findsOneWidget);
+    expect(find.text('All'), findsOneWidget);
+    expect(find.byType(DashboardBountyCard), findsNWidgets(4));
+
+    // Pill filter -> 'Available'
+    await tester.tap(find.text('Available'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DashboardBountyCard), findsOneWidget);
+    expect(find.text('Water plants'), findsOneWidget);
+
+    // Pill filter -> 'Taken'
+    await tester.tap(find.text('Taken'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DashboardBountyCard), findsOneWidget);
+    expect(find.text('Do the laundry'), findsOneWidget);
+
+    // Pill filter -> 'Completed'
+    await tester.tap(find.text('Completed'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DashboardBountyCard), findsOneWidget);
+    expect(find.text('Clean the room'), findsOneWidget);
+
+    // Pill filter -> 'Cancelled'
+    await tester.tap(find.text('Cancelled'));
     await tester.pumpAndSettle();
     expect(find.byType(DashboardBountyCard), findsOneWidget);
     expect(find.text('Buy dinner'), findsOneWidget);
@@ -1212,7 +1213,9 @@ void main() {
     expect(find.byType(DashboardBountyCard), findsOneWidget);
     expect(sectionBgFinder, findsNothing);
 
-    await tester.tap(find.text('In Progress'));
+    await tester.tap(find.byType(DropdownButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('In Progress').last);
     await tester.pumpAndSettle();
 
     expect(find.byType(DashboardBountyCard), findsNothing);
@@ -1334,22 +1337,21 @@ void main() {
     expect(find.text('Fresh Chore'), findsOneWidget);
     expect(find.text('Overdue Roommate Chore'), findsNothing);
 
-    await tester.tap(find.text('Posted by Me'));
-    await tester.pumpAndSettle();
-
-    // Open status dropdown -> select Available (must exclude myPastDueBounty)
+    // Select 'Posted by Me' in primary filter dropdown
     await tester.tap(find.byType(DropdownButton<String>));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Available').last);
+    await tester.tap(find.text('Posted by Me').last);
+    await tester.pumpAndSettle();
+
+    // Tap pill filter -> select Available (must exclude myPastDueBounty)
+    await tester.tap(find.text('Available'));
     await tester.pumpAndSettle();
 
     expect(find.text('My Available Chore'), findsOneWidget);
     expect(find.text('Test Overdue Posted'), findsNothing);
 
-    // Open status dropdown -> select Past Due (must show myPastDueBounty with Past Due chip)
-    await tester.tap(find.byType(DropdownButton<String>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Past Due').last);
+    // Tap pill filter -> select Past Due (must show myPastDueBounty with Past Due chip)
+    await tester.tap(find.text('Past Due'));
     await tester.pumpAndSettle();
 
     expect(find.text('Test Overdue Posted'), findsOneWidget);
@@ -1371,9 +1373,9 @@ void main() {
     await tester.pump();
 
     expect(find.text('Past Due'), findsNWidgets(2));
-    expect(find.text('Claim This Bounty'), findsNothing);
+    expect(find.text('Claim This Chore'), findsNothing);
 
-    // 4. BountyDetailScreen for creator shows Past Due badge and keeps Edit/Cancel/Delete in one row
+    // 4. BountyDetailScreen for creator shows Past Due badge & banner and blocks Edit/Delete when past due
     final creatorService = _FakeShowBountyService(myPastDueBounty);
     await tester.pumpWidget(
       MaterialApp(
@@ -1388,25 +1390,49 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Past Due'), findsOneWidget);
+    expect(find.text('Past Due'), findsNWidgets(2));
+    expect(find.text('Edit'), findsNothing);
+    expect(find.text('Delete'), findsNothing);
+
+    // 5. BountyDetailScreen for creator on a Taken (claimed) chore allows Edit, Cancel, and Delete
+    final myTakenBounty = Bounty(
+      id: '12b',
+      householdId: '2',
+      creatorId: '1',
+      creator: 'Sheldon Cooper',
+      assigneeId: '2',
+      assignee: 'Leonard Hofstadter',
+      title: 'Taken Chore Editable',
+      category: 'Cleaning',
+      points: 50,
+      status: 'claimed',
+      dueAt: now.add(const Duration(hours: 4)),
+    );
+    final takenCreatorService = _FakeShowBountyService(myTakenBounty);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BountyDetailScreen(
+          key: const ValueKey('taken_creator'),
+          bounty: myTakenBounty,
+          currentUser: currentUser,
+          service: takenCreatorService,
+          refreshOnOpen: false,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Taken'), findsOneWidget);
     expect(find.text('Edit'), findsOneWidget);
     expect(find.text('Cancel'), findsOneWidget);
     expect(find.text('Delete'), findsOneWidget);
-    expect(
-      tester.getTopLeft(find.text('Cancel')).dy,
-      tester.getTopLeft(find.text('Edit')).dy,
-    );
-    expect(
-      tester.getTopLeft(find.text('Delete')).dy,
-      tester.getTopLeft(find.text('Edit')).dy,
-    );
 
     await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
-    expect(find.text('Delete Bounty'), findsOneWidget);
+    expect(find.text('Delete Chore'), findsOneWidget);
     await tester.tap(find.text('Delete').last);
     await tester.pumpAndSettle();
-    expect(creatorService.deletedIds, ['12']);
+    expect(takenCreatorService.deletedIds, ['12b']);
   });
 
   testWidgets('DashboardBountyCard reflects Taken, Past Due, Cancelled, and Completed in status chip',
@@ -1556,7 +1582,7 @@ void main() {
     await tester.pump();
 
     expect(find.byType(PageMenuHeader), findsOneWidget);
-    expect(find.text('Bounties'), findsOneWidget);
+    expect(find.text('Chores'), findsOneWidget);
     expect(find.textContaining('Browse and manage chores'), findsNothing);
 
     // 2. HomeShell drawer replaces Switch Household with Active Household dropdown
@@ -1580,7 +1606,10 @@ void main() {
     expect(find.text('Switch Household'), findsNothing);
     expect(find.text('Active Household'), findsOneWidget);
 
-    await tester.tap(find.byType(DropdownButton<int>));
+    await tester.tap(find.descendant(
+      of: find.byType(Drawer),
+      matching: find.byType(DropdownButton<int>),
+    ));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Beach Loft').last);
     await tester.pumpAndSettle();
@@ -1677,19 +1706,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Open drawer and check ordering: Leaderboard -> Guild -> Profile
+    // Open drawer and check ordering: Leaderboard -> Household -> Profile
     await tester.tap(find.byIcon(Icons.menu_rounded).first);
     await tester.pumpAndSettle();
 
-    expect(find.text('Bounties'), findsOneWidget);
+    expect(find.text('Chores'), findsOneWidget);
     final leaderboardY = tester.getTopLeft(find.text('Leaderboard')).dy;
-    final guildY = tester.getTopLeft(find.text('Guild')).dy;
+    final householdY = tester.getTopLeft(find.text('Household')).dy;
     final profileY = tester.getTopLeft(find.text('Profile')).dy;
-    expect(guildY, greaterThan(leaderboardY));
-    expect(profileY, greaterThan(guildY));
+    expect(householdY, greaterThan(leaderboardY));
+    expect(profileY, greaterThan(householdY));
 
-    // Navigate to Guild page
-    await tester.tap(find.text('Guild'));
+    // Navigate to Household page
+    await tester.tap(find.text('Household'));
     await tester.pumpAndSettle();
 
     expect(find.byType(HouseholdView), findsOneWidget);
@@ -1699,9 +1728,9 @@ void main() {
     expect(find.text('Owner'), findsOneWidget);
     expect(find.text('Member'), findsNWidgets(2));
     expect(find.text('150 tokens'), findsOneWidget);
-    expect(find.text('3 bounties'), findsOneWidget);
+    expect(find.text('3 chores'), findsOneWidget);
     expect(find.text('50 tokens'), findsOneWidget);
-    expect(find.text('1 bounty'), findsOneWidget);
+    expect(find.text('1 chore'), findsOneWidget);
     expect(
       find.byWidgetPredicate(
         (w) {
@@ -2212,7 +2241,8 @@ void main() {
     expect(fakeAuth.lastSavedGender, 'male');
     expect(fakeAuth.lastSavedAvatar, 'guy_3');
     expect(find.text('Leonard Leakey Hofstadter'), findsOneWidget);
-    expect(find.text('Male'), findsOneWidget);
+    expect(find.byIcon(Icons.male_rounded), findsOneWidget);
+    expect(find.text('Male'), findsNothing);
     expect(find.text('Leonard Leakey Hofstadter (You)'), findsNothing);
   });
 
@@ -2386,23 +2416,44 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Tap bell icon -> should open Notifications bottom sheet (not My Households)
+    // DashboardView shows Ready for Approval section when a chore is submitted
+    expect(find.text('Ready for Approval'), findsOneWidget);
+    expect(find.text('Mop kitchen floor'), findsOneWidget);
+
+    // Tap bell icon -> should open NotificationsScreen with wireframe layout (not My Households)
     await tester.tap(find.byIcon(Icons.notifications_none_rounded));
     await tester.pumpAndSettle();
 
     expect(find.text('Notifications'), findsOneWidget);
-    expect(find.text('Awaiting Your Review'), findsOneWidget);
-    expect(find.text('Mop kitchen floor'), findsWidgets);
+    expect(find.text('Mark all read'), findsOneWidget);
+    expect(find.text('Today'), findsOneWidget);
+    expect(find.text('Chore Submitted'), findsOneWidget);
+    expect(
+      find.textContaining('Leonard Hofstadter submitted "Mop kitchen floor"'),
+      findsOneWidget,
+    );
     expect(find.text('My Households'), findsNothing);
 
-    // Tap notification item -> opens BountyDetailScreen with Approve & Request Redo
-    await tester.tap(find.text('Review'));
+    // Tap notification card -> marks it as read
+    final unreadDotFinder =
+        find.byKey(const ValueKey('unread_dot_bounty_99_submitted'));
+    expect(unreadDotFinder, findsOneWidget);
+    await tester.tap(find.text('Chore Submitted'));
+    await tester.pumpAndSettle();
+    expect(unreadDotFinder, findsNothing);
+
+    // Go back to Dashboard and open the Ready for Approval chore
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mop kitchen floor'));
     await tester.pumpAndSettle();
 
     expect(find.byType(BountyDetailScreen), findsOneWidget);
     expect(find.text('Pending Review'), findsOneWidget);
     expect(find.text('Approve & Disburse Reward'), findsOneWidget);
     expect(find.text('Request Redo'), findsOneWidget);
+    expect(find.text('Edit'), findsNothing);
+    expect(find.text('Delete'), findsNothing);
 
     // Tap Request Redo -> confirm dialog -> invokes BountyService.reject
     await tester.tap(find.text('Request Redo'));
@@ -2483,22 +2534,20 @@ void main() {
     );
     await tester.pump();
 
-    // Header + Post quick action works when list is non-empty
-    expect(find.text('Post'), findsOneWidget);
-    await tester.tap(find.text('Post'));
+    // Header square [+] quick action button works
+    expect(find.byTooltip('Post a chore'), findsOneWidget);
+    await tester.tap(find.byTooltip('Post a chore'));
     await tester.pump();
     expect(createTapped, isTrue);
 
-    // Search filter narrows down bounties by title
-    await tester.tap(find.byIcon(Icons.search_rounded));
-    await tester.pumpAndSettle();
+    // Search filter directly visible in Row 2 narrows down chores by title
     await tester.enterText(find.byType(TextField), 'coffee');
     await tester.pumpAndSettle();
 
     expect(find.text('Buy coffee beans'), findsOneWidget);
     expect(find.text('Vacuum living room'), findsNothing);
 
-    // HouseholdView owner actions: rename guild + remove member
+    // HouseholdView owner actions: rename household + remove member
     String? renamedTo;
     HouseholdMember? removedMember;
     await tester.pumpWidget(
@@ -2531,24 +2580,322 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byTooltip('Rename guild'));
+    await tester.tap(find.byTooltip('Rename household'));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.descendant(
         of: find.byType(AlertDialog),
         matching: find.byType(TextField),
       ),
-      'Guild 4A',
+      'Apartment 4B',
     );
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
-    expect(renamedTo, 'Guild 4A');
+    expect(renamedTo, 'Apartment 4B');
 
     await tester.tap(find.byTooltip('Remove member'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Remove'));
     await tester.pumpAndSettle();
     expect(removedMember?.userId, 2);
+  });
+
+  testWidgets(
+      'Notification bell redirects to dedicated NotificationsScreen, and banner dropdown shows options',
+      (WidgetTester tester) async {
+    const currentUser = AppUser(
+      id: 1,
+      name: 'Sheldon Cooper',
+      firstName: 'Sheldon',
+      lastName: 'Cooper',
+      gender: 'male',
+      email: 'sheldon@gmail.com',
+    );
+    const householdA = Household(
+      id: 2,
+      name: 'Apartment 4A',
+      inviteCode: 'APT4A',
+      role: 'owner',
+      membersCount: 2,
+    );
+    const householdB = Household(
+      id: 3,
+      name: 'Beach Loft',
+      inviteCode: 'BEACH',
+      role: 'member',
+      membersCount: 4,
+    );
+
+    final bounty = Bounty(
+      id: '201',
+      householdId: '2',
+      creatorId: '1',
+      creator: 'Sheldon Cooper',
+      assigneeId: '2',
+      assignee: 'Leonard Hofstadter',
+      title: 'Fix white board',
+      category: 'Maintenance',
+      points: 75,
+      status: 'submitted',
+    );
+
+    final storage = _FakeTokenStorage();
+    final api = ApiClient(storage);
+    final bountyService = _FakeHomeBountyService(bountiesList: [bounty]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeShell(
+          user: currentUser,
+          auth: AuthService(api, storage),
+          bounties: bountyService,
+          households: _FakeHouseholdService([householdA, householdB]),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 1. Tapping notification bell opens dedicated NotificationsScreen with back button & Mark all read
+    await tester.tap(find.byIcon(Icons.notifications_none_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NotificationsScreen), findsOneWidget);
+    expect(find.text('Notifications'), findsOneWidget);
+    expect(find.text('Mark all read'), findsOneWidget);
+    expect(find.text('Chore Submitted'), findsOneWidget);
+    expect(find.textContaining('Fix white board'), findsOneWidget);
+    expect(find.byTooltip('Back'), findsOneWidget);
+
+    // Tap Mark all read -> marks notifications as read
+    await tester.tap(find.text('Mark all read'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('unread_dot_bounty_201_submitted')),
+      findsNothing,
+    );
+
+    // Tap back button -> returns to HomeShell
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.byType(NotificationsScreen), findsNothing);
+
+    // 2. Tapping dropdown on green banner opens household options
+    final bannerDropdown = find.descendant(
+      of: find.byType(DashboardSummaryCard),
+      matching: find.byType(DropdownButton<int>),
+    );
+    expect(bannerDropdown, findsOneWidget);
+    await tester.tap(bannerDropdown);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Beach Loft'), findsWidgets);
+    expect(find.text('+ Add / Join'), findsOneWidget);
+  });
+
+  testWidgets(
+      'Chore Approved modal appears when creator approves a chore, and Ready for Approval section renders on Dashboard and Chores page',
+      (WidgetTester tester) async {
+    const currentUser = AppUser(
+      id: 1,
+      name: 'Sheldon Cooper',
+      email: 'sheldon@gmail.com',
+      avatar: 'guy_1',
+    );
+    const household = Household(
+      id: 2,
+      name: 'Apartment 4A',
+      inviteCode: 'APT4A',
+      role: 'owner',
+    );
+    final submittedBounty = Bounty(
+      id: '301',
+      householdId: '2',
+      creatorId: '1',
+      creator: 'Sheldon Cooper',
+      assigneeId: '2',
+      assignee: 'Leonard Hofstadter',
+      title: 'Scrub kitchen sink',
+      category: 'Kitchen',
+      points: 60,
+      status: 'submitted',
+      submissionProof: 'Sparkling clean!',
+    );
+
+    // 1. ChoresView displays Ready for Approval section when a chore is submitted
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChoresView(
+            user: currentUser,
+            currentHousehold: household,
+            bounties: [submittedBounty],
+            isLoading: false,
+            onRefresh: () async {},
+            onSelectBounty: (_) {},
+            onCreateBounty: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Ready for Approval'), findsOneWidget);
+    expect(find.text('Scrub kitchen sink'), findsOneWidget);
+
+    // 2. Approving a submitted chore on BountyDetailScreen shows the Chore Approved! modal
+    final service = _FakeHomeBountyService(bountiesList: [submittedBounty]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => BountyDetailScreen(
+                        bounty: submittedBounty,
+                        currentUser: currentUser,
+                        service: service,
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Open Submitted'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open Submitted'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Approve & Disburse Reward'), findsOneWidget);
+    await tester.tap(find.text('Approve & Disburse Reward'));
+    await tester.pumpAndSettle();
+
+    expect(service.verifiedIds, ['301']);
+    expect(find.text('Chore Approved!'), findsOneWidget);
+    expect(find.text('+60 Tokens Awarded'), findsOneWidget);
+    expect(
+      find.textContaining('Leonard Hofstadter'),
+      findsWidgets,
+    );
+
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BountyDetailScreen), findsNothing);
+  });
+
+  testWidgets(
+      'NotificationsScreen only renders notifications triggered or posted by other users',
+      (WidgetTester tester) async {
+    const currentUser = AppUser(
+      id: 1,
+      name: 'Sheldon Cooper',
+      email: 'sheldon@gmail.com',
+      avatar: 'guy_1',
+    );
+
+    // 1. Verify AppNotification.deriveFromBounties excludes self-posted/self-triggered bounties
+    final bounties = [
+      Bounty(
+        id: '1',
+        householdId: '1',
+        creatorId: '1',
+        creator: 'Sheldon Cooper',
+        title: 'Dust shelves',
+        points: 20,
+        status: 'open',
+      ),
+      Bounty(
+        id: '2',
+        householdId: '1',
+        creatorId: '1',
+        creator: 'Sheldon Cooper',
+        assigneeId: '2',
+        assignee: 'Leonard Hofstadter',
+        title: 'Sweep floor',
+        points: 30,
+        status: 'submitted',
+        submissionProof: 'Done!',
+      ),
+    ];
+    final derived = AppNotification.deriveFromBounties(
+      bounties,
+      currentUserId: '1',
+      currentUserName: 'Sheldon Cooper',
+    );
+    expect(derived.length, 1);
+    expect(derived.first.bountyId, '2');
+    expect(derived.first.actorId, '2');
+
+    // 2. Verify NotificationsScreen filters out any self-triggered notification
+    final notifications = [
+      AppNotification(
+        id: 'n_posted_by_self',
+        bountyId: '1',
+        householdId: '1',
+        eventName: 'Chore Posted',
+        description: 'You posted "Dust shelves".',
+        actorId: '1',
+        actorName: 'Sheldon Cooper',
+        isRead: false,
+        createdAt: DateTime.now(),
+      ),
+      AppNotification(
+        id: 'n_submitted_by_other',
+        bountyId: '2',
+        householdId: '1',
+        eventName: 'Chore Submitted',
+        description:
+            'Leonard Hofstadter submitted "Sweep floor" for review.',
+        actorId: '2',
+        actorName: 'Leonard Hofstadter',
+        isRead: false,
+        createdAt: DateTime.now(),
+      ),
+      AppNotification(
+        id: 'n_claimed_by_other',
+        bountyId: '3',
+        householdId: '1',
+        eventName: 'Chore Claimed',
+        description: 'Penny claimed "Empty trash".',
+        actorId: '3',
+        actorName: 'Penny',
+        isRead: false,
+        createdAt: DateTime.now(),
+      ),
+    ];
+
+    final service = BountyService(ApiClient(_FakeTokenStorage()));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NotificationsScreen(
+          user: currentUser,
+          bounties: service,
+          initialNotifications: notifications,
+          onSelectBounty: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify self-triggered notification is NOT displayed
+    expect(find.text('You posted "Dust shelves".'), findsNothing);
+    expect(find.text('Dust shelves'), findsNothing);
+
+    // Verify notifications from other users ARE displayed
+    expect(find.text('Chore Submitted'), findsOneWidget);
+    expect(
+      find.text('Leonard Hofstadter submitted "Sweep floor" for review.'),
+      findsOneWidget,
+    );
+    expect(find.text('Chore Claimed'), findsOneWidget);
+    expect(find.text('Penny claimed "Empty trash".'), findsOneWidget);
   });
 }
 
@@ -2651,7 +2998,13 @@ class _FakeHomeBountyService extends BountyService {
   final List<Bounty> bountiesList;
   final List<LeaderboardEntry> leaderboardList;
   final List<String> rejectedIds = [];
+  final List<String> verifiedIds = [];
   String? lastRejectFeedback;
+
+  @override
+  Future<void> verify(String id, {String? feedback}) async {
+    verifiedIds.add(id);
+  }
 
   @override
   Future<List<Bounty>> all({

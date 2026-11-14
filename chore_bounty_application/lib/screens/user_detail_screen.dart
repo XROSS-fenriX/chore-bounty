@@ -157,12 +157,12 @@ class UserDetailScreen extends StatelessWidget {
               household: household,
               joinedAt: joinedAt,
               isCurrentUser: isCurrentUser,
-            ),
-            const SizedBox(height: 16),
-            UserProfileStatsRow(
-              rank: rank,
-              totalTokens: totalTokens,
-              completedCount: _effectiveCompletedCount,
+              statsRow: UserProfileStatsRow(
+                rank: rank,
+                totalTokens: totalTokens,
+                completedCount: _effectiveCompletedCount,
+                standalone: false,
+              ),
             ),
             const SizedBox(height: 22),
             UserChoreActivitySection(
