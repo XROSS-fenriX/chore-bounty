@@ -7,6 +7,7 @@ use App\Models\Household;
 use App\Models\HouseholdUser;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
@@ -38,6 +39,12 @@ class HouseholdUserController extends Controller
             'role' => ['sometimes', Rule::in(['owner', 'member'])],
         ]);
 
+        abort_if(
+            (int) $validated['user_id'] !== (int) $request->user()->id,
+            403,
+            'Users must join households using an invite code.'
+        );
+
         $membership = HouseholdUser::firstOrCreate(
             [
                 'household_id' => $household->id,
@@ -68,7 +75,10 @@ class HouseholdUserController extends Controller
             'Transfer ownership before removing the household owner.'
         );
 
-        $membership->delete();
+        DB::transaction(function () use ($household, $user, $membership) {
+            $household->releaseMemberAssignments($user->id);
+            $membership->delete();
+        });
 
         return response()->noContent();
     }

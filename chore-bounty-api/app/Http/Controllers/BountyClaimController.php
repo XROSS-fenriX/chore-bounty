@@ -14,8 +14,10 @@ class BountyClaimController extends Controller
 {
     public function index(Request $request)
     {
+        $user = $request->user();
         $claims = BountyClaim::query()
-            ->where('user_id', $request->user()->id)
+            ->where('user_id', $user->id)
+            ->whereHas('bounty', fn ($q) => $q->visibleToUser($user))
             ->with(['bounty', 'completions'])
             ->latest()
             ->paginate(15);
@@ -32,7 +34,7 @@ class BountyClaimController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($lockedBounty->status !== 'open') {
+            if (! $lockedBounty->isAvailable()) {
                 throw ValidationException::withMessages([
                     'bounty' => 'This bounty is no longer available.',
                 ]);

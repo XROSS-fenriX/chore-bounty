@@ -20,9 +20,9 @@ class BountyPolicy
 
     public function view(User $user, Bounty $bounty): Response
     {
-        return $this->isHouseholdMember($user, $bounty->household_id)
+        return Bounty::query()->whereKey($bounty->id)->visibleToUser($user)->exists()
             ? Response::allow()
-            : Response::deny('You are not a member of this household.');
+            : Response::deny('You do not have permission to view this chore.');
     }
 
     public function create(User $user, int $householdId): Response
@@ -34,6 +34,10 @@ class BountyPolicy
 
     public function update(User $user, Bounty $bounty): Response
     {
+        if (! $this->isHouseholdMember($user, (int) $bounty->household_id)) {
+            return Response::deny('You must belong to this household to update this chore.');
+        }
+
         if ($bounty->created_by !== $user->id) {
             return Response::deny('Only the bounty creator can update this quest.');
         }
@@ -47,6 +51,10 @@ class BountyPolicy
 
     public function delete(User $user, Bounty $bounty): Response
     {
+        if (! $this->isHouseholdMember($user, (int) $bounty->household_id)) {
+            return Response::deny('You must belong to this household to delete this chore.');
+        }
+
         $canDelete = $bounty->isAvailable() || $bounty->isCancelled() || $bounty->isExpired();
 
         return ($bounty->created_by === $user->id && $canDelete)
@@ -73,6 +81,10 @@ class BountyPolicy
 
     public function release(User $user, Bounty $bounty): Response
     {
+        if (! $this->isHouseholdMember($user, (int) $bounty->household_id)) {
+            return Response::deny('You must belong to this household to release this chore.');
+        }
+
         $isAssignee = ($bounty->assignee_id === $user->id) ||
                       $bounty->claims()->where('user_id', $user->id)->where('status', 'active')->exists();
 
@@ -83,6 +95,10 @@ class BountyPolicy
 
     public function submit(User $user, Bounty $bounty): Response
     {
+        if (! $this->isHouseholdMember($user, (int) $bounty->household_id)) {
+            return Response::deny('You must belong to this household to submit completion proof.');
+        }
+
         $isAssignee = ($bounty->assignee_id === $user->id) ||
                       $bounty->claims()->where('user_id', $user->id)->where('status', 'active')->exists();
 
@@ -93,6 +109,10 @@ class BountyPolicy
 
     public function complete(User $user, Bounty $bounty): Response
     {
+        if (! $this->isHouseholdMember($user, (int) $bounty->household_id)) {
+            return Response::deny('You must belong to this household to complete this chore.');
+        }
+
         if ($bounty->created_by !== $user->id) {
             return Response::deny('Only the bounty creator can mark this bounty completed without review.');
         }
@@ -106,6 +126,10 @@ class BountyPolicy
 
     public function verify(User $user, Bounty $bounty): Response
     {
+        if (! $this->isHouseholdMember($user, (int) $bounty->household_id)) {
+            return Response::deny('You must belong to this household to review this chore.');
+        }
+
         if ($bounty->created_by !== $user->id) {
             return Response::deny('Only the creator can verify quest completion.');
         }
@@ -119,6 +143,10 @@ class BountyPolicy
 
     public function cancel(User $user, Bounty $bounty): Response
     {
+        if (! $this->isHouseholdMember($user, (int) $bounty->household_id)) {
+            return Response::deny('You must belong to this household to cancel this chore.');
+        }
+
         return $bounty->created_by === $user->id && ($bounty->isAvailable() || $bounty->isTaken())
             ? Response::allow()
             : Response::deny('Only the quest creator can cancel active bounties.');

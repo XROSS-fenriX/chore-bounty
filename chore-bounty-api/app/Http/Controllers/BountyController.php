@@ -16,13 +16,13 @@ class BountyController extends Controller
     public function index(Request $request)
     {
         $query = Bounty::query()
-            ->whereHas('household.members', function ($q) use ($request) {
-                $q->where('users.id', $request->user()->id);
-            })
+            ->visibleToUser($request->user())
             ->with([
                 'creator',
                 'assignee',
-                'household' => fn ($q) => $q->withCount(['members', 'bounties']),
+                'household' => fn ($q) => $q
+                    ->withCount(['members', 'bounties'])
+                    ->with('memberships:id,household_id,user_id'),
                 'activeClaim.user',
             ])
             ->latest();
@@ -102,6 +102,10 @@ class BountyController extends Controller
     public function destroy(Bounty $bounty)
     {
         Gate::authorize('delete', $bounty);
+
+        if (is_array($bounty->submission_images) && ! empty($bounty->submission_images)) {
+            Bounty::removeStoredProofPaths($bounty->submission_images);
+        }
 
         $bounty->delete();
 

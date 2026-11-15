@@ -66,7 +66,8 @@ class StoreBountyRequest extends FormRequest
             'difficulty' => ['required', Rule::in(['easy', 'medium', 'hard', 'epic'])],
             'category' => ['nullable', 'string', 'max:50'],
             'xp_reward' => ['nullable', 'integer', 'min:1', 'max:100000'],
-            'reward_value' => ['nullable', 'numeric', 'min:0'],
+            'reward_value' => ['nullable', 'numeric', 'min:0', 'max:100000'],
+            'points' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:100000'],
             'reward_description' => ['required', 'string', 'max:255'],
             'due_at' => ['nullable', 'date', 'after:now'],
         ];

@@ -3,12 +3,15 @@
 namespace Tests\Feature;
 
 use App\Models\Bounty;
+use App\Models\BountyClaim;
 use App\Models\BountyNotification;
 use App\Models\Household;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -394,6 +397,281 @@ class SecurityAndIntegrityTest extends TestCase
             'household_id' => $household->id,
         ])->assertStatus(200)
           ->assertJsonPath('meta.unread_count', 0);
+    }
+
+    public function test_notifications_cross_household_authorization_and_boundaries(): void
+    {
+        $alice = User::factory()->create(['name' => 'Alice']);
+        $bob = User::factory()->create(['name' => 'Bob']);
+
+        $h1 = Household::create([
+            'name' => 'House One',
+            'invite_code' => 'HOUSE001',
+            'created_by' => $alice->id,
+        ]);
+        $h1->members()->attach($alice->id, ['role' => 'owner', 'joined_at' => now()]);
+
+        $h2 = Household::create([
+            'name' => 'House Two',
+            'invite_code' => 'HOUSE002',
+            'created_by' => $bob->id,
+        ]);
+        $h2->members()->attach($bob->id, ['role' => 'owner', 'joined_at' => now()]);
+
+        $bobNotif = BountyNotification::create([
+            'household_id' => $h2->id,
+            'user_id' => $bob->id,
+            'actor_id' => $alice->id,
+            'event_type' => 'posted',
+            'event_name' => 'Chore Posted',
+            'description' => 'Secret household chore',
+            'category' => 'Cleaning',
+            'is_read' => false,
+        ]);
+
+        Sanctum::actingAs($alice);
+
+        $this->getJson("/api/notifications?household_id={$h2->id}")->assertStatus(403);
+        $this->withHeaders(['X-Household-Id' => (string) $h2->id])
+            ->getJson('/api/notifications')
+            ->assertStatus(403);
+
+        $this->postJson('/api/notifications/read-all', ['household_id' => $h2->id])
+            ->assertStatus(403);
+
+        $this->postJson("/api/notifications/{$bobNotif->id}/read")
+            ->assertStatus(403);
+        $this->assertFalse((bool) $bobNotif->fresh()->is_read);
+    }
+
+    public function test_household_departure_hides_non_completed_chores_and_revokes_mutations_until_rejoin(): void
+    {
+        $alice = User::factory()->create(['name' => 'Alice']);
+        $bob = User::factory()->create(['name' => 'Bob']);
+        $carol = User::factory()->create(['name' => 'Carol']);
+
+        $household = Household::create([
+            'name' => 'Elm Street',
+            'invite_code' => 'ELMST123',
+            'created_by' => $alice->id,
+        ]);
+        $household->members()->attach($alice->id, ['role' => 'owner', 'joined_at' => now()]);
+        $household->members()->attach($bob->id, ['role' => 'member', 'joined_at' => now()]);
+        $household->members()->attach($carol->id, ['role' => 'member', 'joined_at' => now()]);
+
+        $openByBob = Bounty::create([
+            'household_id' => $household->id,
+            'created_by' => $bob->id,
+            'title' => 'Bob Open Chore',
+            'category' => 'Cleaning',
+            'difficulty' => 'easy',
+            'reward_value' => 25,
+            'reward_description' => '25 Points',
+            'status' => 'open',
+        ]);
+
+        $takenByCarol = Bounty::create([
+            'household_id' => $household->id,
+            'created_by' => $alice->id,
+            'assignee_id' => $carol->id,
+            'title' => 'Carol Taken Chore',
+            'category' => 'Kitchen',
+            'difficulty' => 'easy',
+            'reward_value' => 30,
+            'reward_description' => '30 Points',
+            'status' => 'claimed',
+            'claimed_at' => now(),
+        ]);
+
+        $awaitingReview = Bounty::create([
+            'household_id' => $household->id,
+            'created_by' => $alice->id,
+            'assignee_id' => $carol->id,
+            'title' => 'Carol Awaiting Review',
+            'category' => 'Kitchen',
+            'difficulty' => 'medium',
+            'reward_value' => 40,
+            'reward_description' => '40 Points',
+            'status' => 'submitted',
+            'claimed_at' => now()->subHour(),
+            'submitted_at' => now(),
+        ]);
+
+        $completedByCarol = Bounty::create([
+            'household_id' => $household->id,
+            'created_by' => $alice->id,
+            'assignee_id' => $carol->id,
+            'title' => 'Completed By Carol',
+            'category' => 'Cleaning',
+            'difficulty' => 'easy',
+            'reward_value' => 50,
+            'reward_description' => '50 Points',
+            'status' => 'completed',
+            'completed_at' => now(),
+        ]);
+
+        $completedByBob = Bounty::create([
+            'household_id' => $household->id,
+            'created_by' => $alice->id,
+            'assignee_id' => $bob->id,
+            'title' => 'Completed By Bob',
+            'category' => 'Cleaning',
+            'difficulty' => 'easy',
+            'reward_value' => 20,
+            'reward_description' => '20 Points',
+            'status' => 'completed',
+            'completed_at' => now(),
+        ]);
+
+        BountyNotification::create([
+            'household_id' => $household->id,
+            'bounty_id' => $takenByCarol->id,
+            'user_id' => $bob->id,
+            'actor_id' => $carol->id,
+            'event_type' => 'claimed',
+            'event_name' => 'Chore Claimed',
+            'description' => 'Carol claimed a chore.',
+            'category' => 'Kitchen',
+            'is_read' => false,
+        ]);
+
+        // Bob leaves the household
+        Sanctum::actingAs($bob);
+        $this->postJson("/api/households/{$household->id}/leave")->assertStatus(200);
+
+        // Departed user cannot mutate or verify household chores anymore
+        $this->putJson("/api/bounties/{$openByBob->id}", ['title' => 'Sneaky Edit'])->assertStatus(403);
+        $this->postJson("/api/bounties/{$openByBob->id}/cancel")->assertStatus(403);
+        $this->deleteJson("/api/bounties/{$openByBob->id}")->assertStatus(403);
+        $this->postJson("/api/bounties/{$awaitingReview->id}/verify")->assertStatus(403);
+
+        // Departed user's /api/bounties retains ONLY completed chores executed by other members
+        $bobVisibleIds = collect($this->getJson('/api/bounties')->assertStatus(200)->json('data'))
+            ->pluck('id')
+            ->all();
+        $this->assertContains($completedByCarol->id, $bobVisibleIds);
+        $this->assertNotContains($openByBob->id, $bobVisibleIds);
+        $this->assertNotContains($takenByCarol->id, $bobVisibleIds);
+        $this->assertNotContains($awaitingReview->id, $bobVisibleIds);
+        $this->assertNotContains($completedByBob->id, $bobVisibleIds);
+
+        // Direct show of hidden chore returns 403
+        $this->getJson("/api/bounties/{$openByBob->id}")->assertStatus(403);
+        $this->getJson("/api/bounties/{$completedByCarol->id}")->assertStatus(200);
+
+        // Notifications for departed household are revoked
+        $this->getJson("/api/notifications?household_id={$household->id}")->assertStatus(403);
+        $this->assertCount(0, $this->getJson('/api/notifications')->assertStatus(200)->json('data'));
+
+        // Active member Carol does NOT see non-completed chores created by departed Bob
+        Sanctum::actingAs($carol);
+        $carolVisibleIds = collect(
+            $this->getJson("/api/bounties?household_id={$household->id}")->assertStatus(200)->json('data')
+        )->pluck('id')->all();
+        $this->assertNotContains($openByBob->id, $carolVisibleIds);
+        $this->assertContains($takenByCarol->id, $carolVisibleIds);
+        $this->assertContains($completedByCarol->id, $carolVisibleIds);
+
+        // Bob rejoins via invite code: active visibility is restored
+        Sanctum::actingAs($bob);
+        $this->postJson('/api/households/join', ['invite_code' => 'ELMST123'])->assertStatus(200);
+        $rejoinedIds = collect(
+            $this->getJson("/api/bounties?household_id={$household->id}")->assertStatus(200)->json('data')
+        )->pluck('id')->all();
+        $this->assertContains($openByBob->id, $rejoinedIds);
+        $this->assertContains($takenByCarol->id, $rejoinedIds);
+        $this->assertContains($awaitingReview->id, $rejoinedIds);
+        $this->assertContains($completedByCarol->id, $rejoinedIds);
+    }
+
+    public function test_owner_cannot_force_add_outsider_and_member_removal_releases_claims(): void
+    {
+        Storage::fake('public');
+
+        $owner = User::factory()->create(['name' => 'Owner']);
+        $member = User::factory()->create(['name' => 'Member']);
+        $outsider = User::factory()->create(['name' => 'Outsider']);
+
+        $household = Household::create([
+            'name' => 'Oak Place',
+            'invite_code' => 'OAKPL123',
+            'created_by' => $owner->id,
+        ]);
+        $household->members()->attach($owner->id, ['role' => 'owner', 'joined_at' => now()]);
+        $household->members()->attach($member->id, ['role' => 'member', 'joined_at' => now()]);
+
+        Sanctum::actingAs($owner);
+
+        // Owner cannot attach arbitrary user_id directly
+        $this->postJson("/api/households/{$household->id}/members", [
+            'user_id' => $outsider->id,
+        ])->assertStatus(403);
+
+        // Validation upper bound rejects absurd points
+        $this->postJson('/api/bounties', [
+            'household_id' => $household->id,
+            'title' => 'Overpriced Chore',
+            'category' => 'Cleaning',
+            'difficulty' => 'easy',
+            'points' => 999999999,
+        ])->assertStatus(422);
+
+        $bounty = Bounty::create([
+            'household_id' => $household->id,
+            'created_by' => $owner->id,
+            'title' => 'Take out trash',
+            'category' => 'Trash',
+            'difficulty' => 'easy',
+            'reward_value' => 20,
+            'reward_description' => '20 Points',
+            'status' => 'open',
+        ]);
+
+        $otherBounty = Bounty::create([
+            'household_id' => $household->id,
+            'created_by' => $owner->id,
+            'assignee_id' => $owner->id,
+            'title' => 'Wipe counters',
+            'category' => 'Kitchen',
+            'difficulty' => 'easy',
+            'reward_value' => 15,
+            'reward_description' => '15 Points',
+            'status' => 'submitted',
+        ]);
+
+        Sanctum::actingAs($member);
+        $this->postJson("/api/bounties/{$bounty->id}/claim")->assertStatus(200);
+        $proofFile = UploadedFile::fake()->image('proof.jpg');
+        $this->postJson("/api/bounties/{$bounty->id}/submit", [
+            'proof' => 'Done',
+            'proof_images' => [$proofFile],
+        ])->assertStatus(200);
+
+        $bounty->refresh();
+        $storedPath = $bounty->submission_images[0] ?? '';
+        $this->assertNotEmpty($storedPath);
+        $filename = basename($storedPath);
+
+        // Proof image endpoint denies cross-bounty path traversal / mismatch
+        $this->get("/api/bounty-proofs/{$household->id}/{$otherBounty->id}/{$filename}")
+            ->assertStatus(404);
+        $this->get("/api/bounty-proofs/{$household->id}/{$bounty->id}/{$filename}")
+            ->assertStatus(200);
+
+        // Removing member releases claimed/submitted chores back to open & deletes proof
+        Sanctum::actingAs($owner);
+        $this->deleteJson("/api/households/{$household->id}/members/{$member->id}")
+            ->assertStatus(204);
+
+        $bounty->refresh();
+        $this->assertSame('open', $bounty->status);
+        $this->assertNull($bounty->assignee_id);
+        $this->assertEmpty($bounty->submission_images ?? []);
+        Storage::disk('public')->assertMissing($storedPath);
+        $this->assertSame(
+            'released',
+            BountyClaim::where('bounty_id', $bounty->id)->first()?->status
+        );
     }
 }
 

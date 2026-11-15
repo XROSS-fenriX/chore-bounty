@@ -146,7 +146,7 @@ class BountyActionController extends Controller
             throw $e;
         }
 
-        $this->deleteStoredProofImages(is_array($previousImages) ? $previousImages : []);
+        Bounty::removeStoredProofPaths(is_array($previousImages) ? $previousImages : []);
 
         $fresh = $bounty->fresh()->load(['creator', 'assignee', 'household']);
         BountyNotification::dispatchToUser(
@@ -307,7 +307,7 @@ class BountyActionController extends Controller
             }
         });
 
-        $this->deleteStoredProofImages(is_array($previousImages) ? $previousImages : []);
+        Bounty::removeStoredProofPaths(is_array($previousImages) ? $previousImages : []);
 
         $fresh = $bounty->fresh()->load(['creator', 'assignee', 'household']);
         if ($fresh->assignee_id) {
@@ -389,6 +389,16 @@ class BountyActionController extends Controller
             abort(404);
         }
 
+        $relativeUrl = "/storage/bounty-proofs/{$householdId}/{$bountyId}/{$filename}";
+        $bounty = Bounty::query()
+            ->whereKey($bountyId)
+            ->where('household_id', $householdId)
+            ->first();
+
+        if (! $bounty || ! is_array($bounty->submission_images) || ! in_array($relativeUrl, $bounty->submission_images, true)) {
+            abort(404);
+        }
+
         $relativePath = "bounty-proofs/{$householdId}/{$bountyId}/{$filename}";
         $disk = Storage::disk('public');
         if (! $disk->exists($relativePath)) {
@@ -450,26 +460,5 @@ class BountyActionController extends Controller
         return response($content, 200, array_merge($headers, [
             'Content-Length' => (string) strlen($content),
         ]));
-    }
-
-    /**
-     * Remove stored public disk files referenced by /storage/... paths.
-     */
-    private function deleteStoredProofImages(array $paths): void
-    {
-        $diskPaths = [];
-        foreach ($paths as $path) {
-            if (! is_string($path)) {
-                continue;
-            }
-            $relative = ltrim(preg_replace('#^/storage/#', '', trim($path)) ?? '', '/');
-            if ($relative !== '' && ! str_contains($relative, '://')) {
-                $diskPaths[] = $relative;
-            }
-        }
-
-        if (! empty($diskPaths)) {
-            Storage::disk('public')->delete($diskPaths);
-        }
     }
 }

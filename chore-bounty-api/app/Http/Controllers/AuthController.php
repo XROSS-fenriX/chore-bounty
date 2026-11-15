@@ -73,14 +73,16 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
+        $authUser = $request->user();
         $user = User::with([
             'households',
             'memberships',
-            'createdBounties',
+            'createdBounties' => fn ($q) => $q->visibleToUser($authUser),
+            'bountyClaims' => fn ($q) => $q->whereHas('bounty', fn ($bq) => $bq->visibleToUser($authUser)),
             'bountyClaims.bounty',
             'bountyClaims.completions',
             'rewardRedemptions',
-        ])->findOrFail($request->user()->id);
+        ])->findOrFail($authUser->id);
 
         return response()->json([
             'message' => 'Authenticated user retrieved successfully.',
