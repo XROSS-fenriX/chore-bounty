@@ -290,34 +290,14 @@ class HouseholdView extends StatelessWidget {
         titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
         contentPadding: const EdgeInsets.fromLTRB(24, 14, 24, 20),
         actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-        title: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: const BoxDecoration(
-                color: Color(0xFFFEF3C7),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.swap_horiz_rounded,
-                color: Color(0xFFB45309),
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Make ${member.name} owner?',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF0F172A),
-                  letterSpacing: -0.3,
-                ),
-              ),
-            ),
-          ],
+        title: Text(
+          'Make ${member.name} owner?',
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF0F172A),
+            letterSpacing: -0.3,
+          ),
         ),
         content: Text(
           '${member.name} will become the owner of ${household.name}, and your role will change to member.',

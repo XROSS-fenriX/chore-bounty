@@ -2548,6 +2548,13 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('Make Leonard Hofstadter owner?'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.byIcon(Icons.swap_horiz_rounded),
+          ),
+          findsNothing,
+        );
         await tester.tap(find.text('Transfer'));
         await tester.pumpAndSettle();
 
