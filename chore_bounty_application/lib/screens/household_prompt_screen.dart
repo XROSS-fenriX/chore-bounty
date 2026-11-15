@@ -425,22 +425,27 @@ class _HouseholdPromptScreenState extends State<HouseholdPromptScreen> {
             width: isSelected ? 1.6 : 1.0,
           ),
         ),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               icon,
-              size: 20,
+              size: 18,
               color: isSelected ? primaryGreen : const Color(0xFF64748B),
             ),
-            const SizedBox(width: 8),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                color: isSelected ? primaryGreen : const Color(0xFF64748B),
-                letterSpacing: -0.2,
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  color: isSelected ? primaryGreen : const Color(0xFF64748B),
+                  letterSpacing: -0.2,
+                ),
               ),
             ),
           ],

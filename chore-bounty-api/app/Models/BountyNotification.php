@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -46,6 +47,19 @@ class BountyNotification extends Model
     public function actor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'actor_id');
+    }
+
+    public function scopeVisibleTo(Builder $query, User $user): Builder
+    {
+        return $query
+            ->where('user_id', $user->id)
+            ->where(function (Builder $q) use ($user) {
+                $q->whereNull('actor_id')->orWhere('actor_id', '!=', $user->id);
+            })
+            ->where(function (Builder $q) use ($user) {
+                $q->where('event_type', '!=', 'submitted')
+                    ->orWhereHas('bounty', fn (Builder $bq) => $bq->withTrashed()->where('created_by', $user->id));
+            });
     }
 
     public static function dispatchForHousehold(

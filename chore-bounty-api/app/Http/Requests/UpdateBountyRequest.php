@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use Carbon\Carbon;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -37,6 +38,20 @@ class UpdateBountyRequest extends FormRequest
 
     public function rules(): array
     {
+        $bounty = $this->route('bounty');
+        $dueAtRules = ['nullable', 'date'];
+        if ($this->filled('due_at')) {
+            try {
+                $incoming = Carbon::parse((string) $this->input('due_at'));
+                $existing = $bounty?->due_at;
+                if (! $existing || ! $incoming->equalTo($existing)) {
+                    $dueAtRules[] = 'after:now';
+                }
+            } catch (\Throwable) {
+                // Let the 'date' rule handle invalid date strings.
+            }
+        }
+
         return [
             'title' => ['sometimes', 'required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:1000'],
@@ -45,7 +60,14 @@ class UpdateBountyRequest extends FormRequest
             'xp_reward' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'reward_value' => ['nullable', 'numeric', 'min:0'],
             'reward_description' => ['sometimes', 'required', 'string', 'max:255'],
-            'due_at' => ['nullable', 'date'],
+            'due_at' => $dueAtRules,
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'due_at.after' => 'Due date and time must be in the future.',
         ];
     }
 }

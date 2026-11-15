@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Bounty;
+use App\Models\BountyNotification;
 use App\Models\Household;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -331,13 +332,42 @@ class SecurityAndIntegrityTest extends TestCase
         $this->assertNotContains('submitted', $events);
         $this->assertSame(4, $notifRes->json('meta.unread_count'));
 
-        // Observer sees 'awarded' (and not 'approved')
+        // Observer sees 'awarded', NOT 'approved' and NOT 'submitted' (creator-only)
         Sanctum::actingAs($observer);
         $observerNotifs = $this->getJson("/api/notifications?household_id={$household->id}")
             ->assertStatus(200);
         $observerEvents = collect($observerNotifs->json('data'))->pluck('event_type')->all();
         $this->assertContains('awarded', $observerEvents);
         $this->assertNotContains('approved', $observerEvents);
+        $this->assertNotContains('submitted', $observerEvents);
+
+        // Verify only the chore poster received a 'submitted' DB notification
+        $submittedRecipients = BountyNotification::query()
+            ->where('bounty_id', $bountyId)
+            ->where('event_type', 'submitted')
+            ->pluck('user_id')
+            ->all();
+        $this->assertSame([$creator->id], $submittedRecipients);
+
+        // Even if a legacy 'submitted' row exists for a non-creator, /api/notifications hides it
+        BountyNotification::create([
+            'household_id' => $household->id,
+            'bounty_id' => $bountyId,
+            'user_id' => $observer->id,
+            'actor_id' => $roommate->id,
+            'event_type' => 'submitted',
+            'event_name' => 'Chore Submitted',
+            'description' => "{$roommate->name} submitted chore for approval.",
+            'category' => 'Cleaning',
+            'is_read' => false,
+        ]);
+        Sanctum::actingAs($observer);
+        $legacyCheckEvents = collect(
+            $this->getJson("/api/notifications?household_id={$household->id}")
+                ->assertStatus(200)
+                ->json('data')
+        )->pluck('event_type')->all();
+        $this->assertNotContains('submitted', $legacyCheckEvents);
 
         // Creator sees events triggered by roommate (claimed, submitted), but not own events (posted, awarded, cancelled)
         Sanctum::actingAs($creator);

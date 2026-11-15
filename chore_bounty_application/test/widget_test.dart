@@ -335,7 +335,7 @@ void main() {
     expect(find.text('Claim This Chore'), findsOneWidget);
   });
 
-  testWidgets('BountyDetailScreen renders schedule due date with schedule icon and category with tag icon',
+  testWidgets('BountyDetailScreen renders schedule due date and category without metadata icons',
       (WidgetTester tester) async {
     final now = DateTime.now();
     final todayEightPm = DateTime(now.year, now.month, now.day, 20, 0);
@@ -382,16 +382,16 @@ void main() {
     expect(find.text('Submit for Review'), findsOneWidget);
     final descBodyText = tester.widget<Text>(find.text('Wipe all counters and wash dishes.'));
 
-    // Verify DUE and CATEGORY metadata inside BountyInfoCard
+    // Verify DUE and CATEGORY metadata inside BountyInfoCard (without icons)
     expect(find.text('DUE'), findsOneWidget);
-    expect(find.byIcon(Icons.schedule_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.schedule_rounded), findsNothing);
     expect(find.text('Today, 8:00 PM'), findsOneWidget);
     final dueText = tester.widget<Text>(find.text('Today, 8:00 PM'));
     expect(dueText.style?.fontSize, descBodyText.style?.fontSize);
 
-    // Verify tag icon and category 'Cleaning'
+    // Verify category 'Cleaning' has no tag icon
     expect(find.text('CATEGORY'), findsOneWidget);
-    expect(find.byIcon(Icons.tag_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.tag_rounded), findsNothing);
     expect(find.text('Cleaning'), findsOneWidget);
     final categoryText = tester.widget<Text>(find.text('Cleaning'));
     expect(categoryText.style?.fontSize, descBodyText.style?.fontSize);
@@ -1108,12 +1108,14 @@ void main() {
     expect(find.text('Do the laundry'), findsOneWidget);
 
     // Pill filter -> 'Completed'
+    await tester.ensureVisible(find.text('Completed'));
     await tester.tap(find.text('Completed'));
     await tester.pumpAndSettle();
     expect(find.byType(DashboardBountyCard), findsOneWidget);
     expect(find.text('Clean the room'), findsOneWidget);
 
     // Pill filter -> 'Cancelled'
+    await tester.ensureVisible(find.text('Cancelled'));
     await tester.tap(find.text('Cancelled'));
     await tester.pumpAndSettle();
     expect(find.byType(DashboardBountyCard), findsOneWidget);
@@ -1343,6 +1345,7 @@ void main() {
     expect(find.text('Test Overdue Posted'), findsNothing);
 
     // Tap pill filter -> select Past Due (must show myPastDueBounty with Past Due chip)
+    await tester.ensureVisible(find.text('Past Due'));
     await tester.tap(find.text('Past Due'));
     await tester.pumpAndSettle();
 
@@ -1524,7 +1527,8 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Taken'), findsNWidgets(2));
+    expect(find.text('Taken'), findsOneWidget);
+    expect(find.text('Awaiting Review'), findsOneWidget);
     expect(find.text('Past Due'), findsOneWidget);
     expect(find.text('Cancelled'), findsOneWidget);
     expect(find.text('Completed'), findsOneWidget);
@@ -1897,16 +1901,19 @@ void main() {
     await tester.tap(find.text('Leaderboard'));
     await tester.pumpAndSettle();
 
-    // 1. Minimalist Leaderboard header, period control, summary card, no badges/crowns
+    // 1. Minimalist Leaderboard header, period control, no summary card / member subtitle / badges / crowns
     expect(find.byType(PageMenuHeader), findsWidgets);
     expect(find.text('Leaderboard'), findsWidgets);
-    expect(find.text('Apartment 4A · 4 members'), findsOneWidget);
+    expect(find.text('Apartment 4A · 4 members'), findsNothing);
     expect(find.text('Week'), findsOneWidget);
     expect(find.text('Month'), findsOneWidget);
     expect(find.text('All time'), findsOneWidget);
     expect(find.text('My Badges'), findsNothing);
     expect(find.text('First Clean'), findsNothing);
-    expect(find.text('370'), findsOneWidget);
+    expect(find.text('TOKENS EARNED'), findsNothing);
+    expect(find.text('CHORES DONE'), findsNothing);
+    expect(find.text('IN PROGRESS'), findsNothing);
+    expect(find.text('370'), findsNothing);
     expect(find.textContaining('behind Sheldon'), findsNothing);
     expect(find.byType(LinearProgressIndicator), findsNothing);
 
@@ -2104,7 +2111,12 @@ void main() {
       scrollable: profileScrollable,
     );
     await tester.pumpAndSettle();
-    expect(find.text('Leave Household'), findsNWidgets(2));
+    expect(find.byIcon(Icons.more_horiz_rounded), findsNWidgets(2));
+    await tester.tap(find.byIcon(Icons.more_horiz_rounded).first);
+    await tester.pumpAndSettle();
+    expect(find.text('Leave Household'), findsOneWidget);
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
     expect(find.text('Log out'), findsOneWidget);
   });
 
@@ -2448,7 +2460,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(BountyDetailScreen), findsOneWidget);
-    expect(find.text('Pending Review'), findsOneWidget);
+    expect(find.text('Awaiting Review'), findsOneWidget);
     expect(find.text('Approve & Disburse Reward'), findsOneWidget);
     expect(find.text('Request Redo'), findsOneWidget);
     expect(find.text('Edit'), findsNothing);

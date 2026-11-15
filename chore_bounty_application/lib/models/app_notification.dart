@@ -7,6 +7,7 @@ class AppNotification {
     required this.description,
     this.householdId = '',
     this.bountyId,
+    this.bountyCreatorId,
     this.bountyTitle,
     this.tokens,
     this.userId = '',
@@ -22,6 +23,7 @@ class AppNotification {
   final String id;
   final String householdId;
   final String? bountyId;
+  final String? bountyCreatorId;
   final String? bountyTitle;
   final int? tokens;
   final String userId;
@@ -54,14 +56,30 @@ class AppNotification {
     return false;
   }
 
+  bool isVisibleTo(String? targetUserId, [String? targetUserName]) {
+    if (isTriggeredBy(targetUserId, targetUserName)) {
+      return false;
+    }
+    if (eventType == 'submitted' &&
+        bountyCreatorId != null &&
+        bountyCreatorId!.isNotEmpty &&
+        targetUserId != null &&
+        targetUserId.isNotEmpty) {
+      return bountyCreatorId == targetUserId;
+    }
+    return true;
+  }
+
   AppNotification copyWith({
     bool? isRead,
     DateTime? readAt,
+    String? bountyCreatorId,
   }) {
     return AppNotification(
       id: id,
       householdId: householdId,
       bountyId: bountyId,
+      bountyCreatorId: bountyCreatorId ?? this.bountyCreatorId,
       bountyTitle: bountyTitle,
       tokens: tokens,
       userId: userId,
@@ -104,10 +122,16 @@ class AppNotification {
         ? rawTokens.toInt()
         : (rawTokens != null ? int.tryParse(rawTokens.toString()) : null);
 
+    final rawBountyCreatorId =
+        (bountyMap?['creator_id'] ?? j['bounty_creator_id'])?.toString().trim();
+
     return AppNotification(
       id: (j['id'] ?? '').toString(),
       householdId: (j['household_id'] ?? '').toString(),
       bountyId: (bountyMap?['id'] ?? j['bounty_id'])?.toString(),
+      bountyCreatorId: (rawBountyCreatorId != null && rawBountyCreatorId.isNotEmpty)
+          ? rawBountyCreatorId
+          : null,
       bountyTitle:
           (rawBountyTitle != null && rawBountyTitle.isNotEmpty) ? rawBountyTitle : null,
       tokens: parsedTokens,
@@ -172,6 +196,7 @@ class AppNotification {
           id: 'bounty_${b.id}_submitted',
           householdId: b.householdId,
           bountyId: b.id,
+          bountyCreatorId: b.creatorId,
           actorId: b.assigneeId,
           actorName: assignee,
           eventType: 'submitted',
@@ -181,7 +206,7 @@ class AppNotification {
           isRead: readIds.contains('bounty_${b.id}_submitted'),
           createdAt: b.submittedAt ?? b.claimedAt ?? b.createdAt ?? now,
         );
-        if (!notif.isTriggeredBy(currentUserId, currentUserName)) {
+        if (notif.isVisibleTo(currentUserId, currentUserName)) {
           results.add(notif);
         }
       } else if (b.isClaimed) {

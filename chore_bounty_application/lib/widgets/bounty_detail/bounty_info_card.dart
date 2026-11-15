@@ -23,7 +23,7 @@ class BountyInfoCard extends StatelessWidget {
   final VoidCallback? onCreatorTap;
 
   static const _labelStyle = TextStyle(
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: FontWeight.w700,
     letterSpacing: 0.6,
     color: Color(0xFF94A3B8),
@@ -32,7 +32,7 @@ class BountyInfoCard extends StatelessWidget {
   static const _valueStyle = TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.w600,
-    color: Color(0xFF1E293B),
+    color: Color(0xFF0F172A),
   );
 
   String _formatDueDate(DateTime? due) {
@@ -76,7 +76,7 @@ class BountyInfoCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -88,108 +88,31 @@ class BountyInfoCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header: Category Icon + Title/Status + Meta Line
+          // Top Meta Strip: Status + Token Reward
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              BountyStatusChip(bounty: bounty),
               Container(
-                width: 56,
-                height: 56,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(14),
+                  color: const Color(0xFFFFFBEB),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFFDE68A)),
                 ),
-                alignment: Alignment.center,
-                child: CategoryIconWidget(
-                  category: formattedCategory,
-                  size: 38,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            bounty.title,
-                            style: const TextStyle(
-                              fontSize: 17.5,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF0F172A),
-                              letterSpacing: -0.3,
-                              height: 1.25,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        BountyStatusChip(bounty: bounty),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const BountyCoinWidget(size: 16),
-                            const SizedBox(width: 5),
-                            Text(
-                              '$tokenAmount Tokens',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF334155),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const Text(
-                          '·',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF94A3B8),
-                          ),
-                        ),
-                        InkWell(
-                          onTap: onCreatorTap,
-                          borderRadius: BorderRadius.circular(12),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              UserAvatarWidget(
-                                avatarId: creatorAvatar,
-                                userName: posterName,
-                                size: 18,
-                                onTap: onCreatorTap,
-                              ),
-                              const SizedBox(width: 5),
-                              ConstrainedBox(
-                                constraints: const BoxConstraints(maxWidth: 160),
-                                child: Text(
-                                  posterName,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF475569),
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                    const BountyCoinWidget(size: 14),
+                    const SizedBox(width: 5),
+                    Text(
+                      '$tokenAmount Tokens',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF92400E),
+                      ),
                     ),
                   ],
                 ),
@@ -197,15 +120,92 @@ class BountyInfoCard extends StatelessWidget {
             ],
           ),
 
-          // Optional Description
+          const SizedBox(height: 12),
+
+          // Hero Header: Category Icon + Title + Creator Attribution
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                alignment: Alignment.center,
+                child: CategoryIconWidget(
+                  category: formattedCategory,
+                  size: 32,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      bounty.title,
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                        letterSpacing: -0.35,
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 5),
+                    InkWell(
+                      onTap: onCreatorTap,
+                      borderRadius: BorderRadius.circular(10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 1),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            UserAvatarWidget(
+                              avatarId: creatorAvatar,
+                              userName: posterName,
+                              size: 18,
+                              onTap: onCreatorTap,
+                            ),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Posted by ',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF94A3B8),
+                              ),
+                            ),
+                            Flexible(
+                              child: Text(
+                                posterName,
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF475569),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // Description body without heavy divider/heading clutter
           if (hasDescription) ...[
-            const Divider(
-              color: Color(0xFFE2E8F0),
-              height: 28,
-              thickness: 1,
-            ),
-            const Text('DESCRIPTION', style: _labelStyle),
-            const SizedBox(height: 6),
+            const SizedBox(height: 14),
             Text(
               trimmedDescription,
               style: const TextStyle(
@@ -217,91 +217,69 @@ class BountyInfoCard extends StatelessWidget {
             ),
           ],
 
-          // Metadata Row: DUE & CATEGORY
-          const Divider(
-            color: Color(0xFFE2E8F0),
-            height: 28,
-            thickness: 1,
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 3,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('DUE', style: _labelStyle),
-                    const SizedBox(height: 6),
-                    Row(
+          const SizedBox(height: 14),
+
+          // Clean Metadata Well: DUE & CATEGORY (no icons)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Padding(
-                          padding: EdgeInsets.only(top: 2),
-                          child: Icon(
-                            Icons.schedule_rounded,
-                            size: 15,
-                            color: Color(0xFF64748B),
-                          ),
+                        const Text('DUE', style: _labelStyle),
+                        const SizedBox(height: 4),
+                        Text(
+                          _formatDueDate(bounty.dueAt),
+                          style: _valueStyle,
                         ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _formatDueDate(bounty.dueAt),
-                                style: _valueStyle,
-                              ),
-                              if (isDatePastDue) ...[
-                                const SizedBox(height: 2),
-                                const Text(
-                                  'Past due',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFFDC2626),
-                                  ),
-                                ),
-                              ],
-                            ],
+                        if (isDatePastDue) ...[
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Past due',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFFDC2626),
+                            ),
                           ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const VerticalDivider(
+                    width: 24,
+                    thickness: 1,
+                    color: Color(0xFFE2E8F0),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('CATEGORY', style: _labelStyle),
+                        const SizedBox(height: 4),
+                        Text(
+                          formattedCategory,
+                          style: _valueStyle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('CATEGORY', style: _labelStyle),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.tag_rounded,
-                          size: 15,
-                          color: Color(0xFF64748B),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            formattedCategory,
-                            style: _valueStyle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/bounty.dart';
 import '../bounty_form/bounty_category_icons.dart';
-import 'dashboard_illustrations.dart';
 
 class DashboardBountyCard extends StatelessWidget {
   const DashboardBountyCard({
@@ -74,16 +73,20 @@ class DashboardBountyCard extends StatelessWidget {
 
     if (t.contains('trash') || t.contains('bin') || t.contains('garbage') || t.contains('rubbish') || c == 'trash') {
       bgColor = const Color(0xFFD1FAE5); // Mint
-      iconWidget = const TrashBinWidget(size: 44);
-    } else if (t.contains('vacuum') || t.contains('living room') || t.contains('carpet') || t.contains('rug')) {
+      iconWidget = const CategoryIconWidget(category: 'Trash', size: 44);
+    } else if (t.contains('vacuum') ||
+        t.contains('living room') ||
+        t.contains('carpet') ||
+        t.contains('rug') ||
+        t.contains('clean') ||
+        t.contains('sweep') ||
+        t.contains('mop') ||
+        c == 'cleaning') {
       bgColor = const Color(0xFFFEF3C7); // Apricot/Peach
-      iconWidget = const VacuumCleanerWidget(size: 44);
+      iconWidget = const CategoryIconWidget(category: 'Cleaning', size: 44);
     } else if (t.contains('laundry') || t.contains('wash') || c == 'laundry' || t.contains('clothes')) {
       bgColor = const Color(0xFFEDE9FE); // Lavender
       iconWidget = const CategoryIconWidget(category: 'Laundry', size: 44);
-    } else if (t.contains('clean') || t.contains('sweep') || t.contains('mop') || c == 'cleaning') {
-      bgColor = const Color(0xFFFEF3C7); // Peach
-      iconWidget = const CategoryIconWidget(category: 'Cleaning', size: 44);
     } else if (t.contains('kitchen') || t.contains('dish') || c == 'kitchen' || c == 'dishes' || t.contains('cook')) {
       bgColor = const Color(0xFFFFEDD5); // Soft orange
       iconWidget = const CategoryIconWidget(category: 'Kitchen', size: 44);
@@ -126,7 +129,15 @@ class DashboardBountyCard extends StatelessWidget {
         fgColor: const Color(0xFFDC2626),
       );
     }
-    if (bounty.isClaimed || bounty.isSubmitted) {
+    if (bounty.isSubmitted) {
+      return (
+        label: 'Awaiting Review',
+        icon: Icons.hourglass_top_rounded,
+        bgColor: const Color(0xFFEEF2FF),
+        fgColor: const Color(0xFF4338CA),
+      );
+    }
+    if (bounty.isClaimed) {
       return (
         label: 'Taken',
         icon: Icons.hourglass_bottom_rounded,

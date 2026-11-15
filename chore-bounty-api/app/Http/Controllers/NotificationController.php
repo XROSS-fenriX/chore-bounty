@@ -15,10 +15,7 @@ class NotificationController extends Controller
         $householdId = $request->header('X-Household-Id') ?? $request->query('household_id');
 
         $query = BountyNotification::query()
-            ->where('user_id', $user->id)
-            ->where(function ($q) use ($user) {
-                $q->whereNull('actor_id')->orWhere('actor_id', '!=', $user->id);
-            })
+            ->visibleTo($user)
             ->with([
                 'actor',
                 'bounty' => fn ($q) => $q->withTrashed(),
@@ -65,10 +62,7 @@ class NotificationController extends Controller
         $householdId = $request->header('X-Household-Id') ?? $request->query('household_id');
 
         $query = BountyNotification::query()
-            ->where('user_id', $user->id)
-            ->where(function ($q) use ($user) {
-                $q->whereNull('actor_id')->orWhere('actor_id', '!=', $user->id);
-            })
+            ->visibleTo($user)
             ->where('is_read', false);
 
         if ($householdId) {

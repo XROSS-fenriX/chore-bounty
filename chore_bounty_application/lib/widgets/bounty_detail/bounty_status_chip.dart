@@ -23,9 +23,9 @@ class BountyStatusChip extends StatelessWidget {
           const Color(0xFF15803D),
         ),
       _ when bounty.isSubmitted => (
-          'Pending Review',
-          const Color(0xFFFEF3C7),
-          const Color(0xFFB45309),
+          'Awaiting Review',
+          const Color(0xFFEEF2FF),
+          const Color(0xFF4338CA),
         ),
       _ when bounty.isTaken => (
           'Taken',

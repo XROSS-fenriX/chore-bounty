@@ -89,7 +89,7 @@ class _HomeShellState extends State<HomeShell> {
     final uname = currentUser.name;
     if (_latestNotifications.isNotEmpty) {
       return _latestNotifications
-          .where((n) => !n.isRead && !n.isTriggeredBy(uid, uname))
+          .where((n) => !n.isRead && n.isVisibleTo(uid, uname))
           .length;
     }
     return _latestBounties
@@ -314,7 +314,7 @@ class _HomeShellState extends State<HomeShell> {
     final uid = currentUser.id.toString();
     final uname = currentUser.name;
     final filtered = notifications
-        .where((n) => !n.isTriggeredBy(uid, uname))
+        .where((n) => n.isVisibleTo(uid, uname))
         .toList();
 
     final approvalsToCelebrate = <AppNotification>[];

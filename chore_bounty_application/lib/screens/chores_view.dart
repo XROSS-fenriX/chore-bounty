@@ -46,6 +46,7 @@ class _ChoresViewState extends State<ChoresView> {
     'All',
     'Available',
     'Taken',
+    'Awaiting Review',
     'Completed',
     'Past Due',
     'Cancelled',
@@ -76,7 +77,9 @@ class _ChoresViewState extends State<ChoresView> {
       case 'Available':
         return b.isAvailable;
       case 'Taken':
-        return b.isClaimed || b.isSubmitted;
+        return b.isClaimed;
+      case 'Awaiting Review':
+        return b.isSubmitted;
       case 'Completed':
         return b.isCompleted;
       case 'Past Due':

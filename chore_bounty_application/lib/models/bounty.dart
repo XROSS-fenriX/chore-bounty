@@ -59,12 +59,22 @@ class Bounty {
   bool get isClaimed => status == 'claimed' || status == 'in_progress';
   bool get isTaken => isClaimed;
   bool get isSubmitted => status == 'submitted';
+  bool get isAwaitingReview => isSubmitted;
   bool get isCompleted => status == 'completed';
   bool get isCancelled => status == 'cancelled' || status == 'canceled';
 
   bool get canEdit => isAvailable || isTaken;
   bool get canCancel => isAvailable || isTaken;
   bool get canDelete => isAvailable || isCancelled || isExpired;
+
+  String get statusLabel {
+    if (isCancelled) return 'Cancelled';
+    if (isCompleted) return 'Completed';
+    if (isSubmitted) return 'Awaiting Review';
+    if (isTaken) return 'Taken';
+    if (isExpired) return 'Past Due';
+    return 'Available';
+  }
 
   static String inferCategory(String? category, String title, String description) {
     final cat = (category ?? '').trim();

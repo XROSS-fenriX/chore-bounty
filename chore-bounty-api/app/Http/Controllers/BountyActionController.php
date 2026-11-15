@@ -114,9 +114,10 @@ class BountyActionController extends Controller
         });
 
         $fresh = $bounty->fresh()->load(['creator', 'assignee', 'household']);
-        BountyNotification::dispatchForHousehold(
+        BountyNotification::dispatchToUser(
             $fresh,
             $user,
+            (int) $fresh->created_by,
             'submitted',
             'Chore Submitted',
             "{$user->name} submitted \"{$fresh->title}\" for approval."

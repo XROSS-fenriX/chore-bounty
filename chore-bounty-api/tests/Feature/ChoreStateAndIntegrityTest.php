@@ -327,4 +327,39 @@ class ChoreStateAndIntegrityTest extends TestCase
         $this->assertNull($bounty->assignee_id);
         $this->assertNull($bounty->claimed_at);
     }
+
+    public function test_chore_creation_rejects_past_or_current_due_at_and_accepts_future_or_null(): void
+    {
+        [$creator, , , $household] = $this->seedHousehold();
+        Sanctum::actingAs($creator);
+
+        $basePayload = [
+            'household_id' => $household->id,
+            'title' => 'Water plants',
+            'category' => 'Cleaning',
+            'points' => 25,
+            'reward_description' => '25 Tokens',
+        ];
+
+        $this->postJson('/api/bounties', [
+            ...$basePayload,
+            'due_at' => now()->subMinute()->toIso8601String(),
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['due_at']);
+
+        $this->postJson('/api/bounties', [
+            ...$basePayload,
+            'due_at' => now()->toIso8601String(),
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['due_at']);
+
+        $this->postJson('/api/bounties', [
+            ...$basePayload,
+            'due_at' => now()->addHour()->toIso8601String(),
+        ])->assertStatus(201);
+
+        $this->postJson('/api/bounties', $basePayload)->assertStatus(201);
+    }
 }

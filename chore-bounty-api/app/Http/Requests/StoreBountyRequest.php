@@ -68,7 +68,14 @@ class StoreBountyRequest extends FormRequest
             'xp_reward' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'reward_value' => ['nullable', 'numeric', 'min:0'],
             'reward_description' => ['required', 'string', 'max:255'],
-            'due_at' => ['nullable', 'date'],
+            'due_at' => ['nullable', 'date', 'after:now'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'due_at.after' => 'Due date and time must be in the future.',
         ];
     }
 }

@@ -115,10 +115,22 @@ class BountyService {
           ? (res.data['data'] ?? res.data['notifications'] ?? [])
           : res.data;
       if (raw is List) {
+        final creatorByBountyId = <String, String>{
+          for (final b in fallbackBounties)
+            if (b.id.isNotEmpty && b.creatorId.isNotEmpty) b.id: b.creatorId,
+        };
         for (final item in raw.whereType<Map>()) {
-          final parsed =
+          var parsed =
               AppNotification.fromJson(Map<String, dynamic>.from(item));
-          if (parsed.isTriggeredBy(currentUserId, currentUserName)) {
+          if ((parsed.bountyCreatorId == null ||
+                  parsed.bountyCreatorId!.isEmpty) &&
+              parsed.bountyId != null) {
+            final knownCreator = creatorByBountyId[parsed.bountyId!];
+            if (knownCreator != null && knownCreator.isNotEmpty) {
+              parsed = parsed.copyWith(bountyCreatorId: knownCreator);
+            }
+          }
+          if (!parsed.isVisibleTo(currentUserId, currentUserName)) {
             continue;
           }
           if (parsed.isRead) {

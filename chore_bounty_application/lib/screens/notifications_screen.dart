@@ -44,8 +44,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   bool get _isTestEnvironment =>
       WidgetsBinding.instance.runtimeType.toString().contains('Test');
 
-  bool _isFromOtherUser(AppNotification n) {
-    return !n.isTriggeredBy(widget.user.id.toString(), widget.user.name);
+  bool _isVisibleNotification(AppNotification n, [List<Bounty>? bounties]) {
+    var candidate = n;
+    if ((candidate.bountyCreatorId == null ||
+            candidate.bountyCreatorId!.isEmpty) &&
+        candidate.bountyId != null) {
+      final source = bounties ?? _bounties;
+      final match = source.where((b) => b.id == candidate.bountyId).firstOrNull;
+      if (match != null && match.creatorId.isNotEmpty) {
+        candidate = candidate.copyWith(bountyCreatorId: match.creatorId);
+      }
+    }
+    return candidate.isVisibleTo(widget.user.id.toString(), widget.user.name);
   }
 
   @override
@@ -53,7 +63,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     super.initState();
     _bounties = List<Bounty>.from(widget.initialBounties);
     if (widget.initialNotifications.isNotEmpty) {
-      _notifications = widget.initialNotifications.where(_isFromOtherUser).toList();
+      _notifications =
+          widget.initialNotifications.where(_isVisibleNotification).toList();
     } else if (_bounties.isNotEmpty) {
       _notifications = AppNotification.deriveFromBounties(
         _bounties,
@@ -99,7 +110,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (!mounted) return;
       setState(() {
         _bounties = effectiveBounties;
-        _notifications = fetchedNotifications.where(_isFromOtherUser).toList();
+        _notifications = fetchedNotifications
+            .where((n) => _isVisibleNotification(n, effectiveBounties))
+            .toList();
         _isLoading = false;
       });
     } catch (_) {
@@ -168,7 +181,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _handleMarkAllRead() async {
-    final visible = _notifications.where(_isFromOtherUser).toList();
+    final visible = _notifications.where(_isVisibleNotification).toList();
     if (visible.isEmpty) return;
     final allIds = visible.map((n) => n.id).toList();
     setState(() {
@@ -256,7 +269,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final visible = _notifications.where(_isFromOtherUser).toList();
+    final visible = _notifications.where(_isVisibleNotification).toList();
     final hasUnread = visible.any((n) => !n.isRead);
     final grouped = _groupByDate(visible);
 

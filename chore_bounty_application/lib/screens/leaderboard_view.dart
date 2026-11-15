@@ -6,7 +6,6 @@ import '../models/leaderboard_entry.dart';
 import '../widgets/dashboard/dashboard_filter_pills.dart';
 import '../widgets/leaderboard/leaderboard_podium.dart';
 import '../widgets/leaderboard/leaderboard_row.dart';
-import '../widgets/leaderboard/leaderboard_summary_card.dart';
 import '../widgets/ui.dart';
 
 class LeaderboardView extends StatefulWidget {
@@ -79,12 +78,8 @@ class _LeaderboardViewState extends State<LeaderboardView> {
 
   @override
   Widget build(BuildContext context) {
-    final household = widget.currentHousehold;
     final entries = widget.leaderboard;
     final podiumEntries = entries.take(3).toList();
-    final memberCount = household != null
-        ? (household.membersCount > 0 ? household.membersCount : entries.length)
-        : entries.length;
     final selectedLabel = _periodKeyToLabel[_selectedPeriod] ?? 'All time';
 
     return Scaffold(
@@ -102,19 +97,8 @@ class _LeaderboardViewState extends State<LeaderboardView> {
                 onRefresh: widget.onRefresh,
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
                   children: [
-                    if (household != null) ...[
-                      Text(
-                        '${household.name} · $memberCount ${memberCount == 1 ? 'member' : 'members'}',
-                        style: const TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF64748B),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
                     DashboardFilterPills(
                       filters: _periodLabels,
                       selectedFilter: selectedLabel,
@@ -143,8 +127,6 @@ class _LeaderboardViewState extends State<LeaderboardView> {
                         message: 'No household members on the leaderboard yet.',
                       )
                     else ...[
-                      LeaderboardSummaryCard(entries: entries),
-                      const SizedBox(height: 18),
                       LeaderboardPodiumSection(
                         entries: podiumEntries,
                         currentUserId: widget.currentUser?.id,

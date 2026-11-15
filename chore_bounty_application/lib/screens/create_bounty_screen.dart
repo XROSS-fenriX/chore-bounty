@@ -33,8 +33,12 @@ class _CreateBountyState extends State<CreateBounty> {
 
   String _selectedCategory = 'Cleaning';
   DateTime? _dueDate;
+  String? _dueDateError;
   bool _busy = false;
   String? _error;
+
+  bool get _shouldEnforceFutureDueDate =>
+      !widget.isEditing || _dueDate != widget.bountyToEdit?.dueAt;
 
   @override
   void initState() {
@@ -76,7 +80,19 @@ class _CreateBountyState extends State<CreateBounty> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    final formValid = _formKey.currentState!.validate();
+    final hasValidDate = _dueDate == null ||
+        !_shouldEnforceFutureDueDate ||
+        _dueDate!.isAfter(DateTime.now());
+    final dueDateValid = _dueDateError == null && hasValidDate;
+
+    setState(() {
+      if (!hasValidDate) {
+        _dueDateError = BountyDateTimePicker.futureErrorMessage;
+      }
+    });
+
+    if (!formValid || !dueDateValid) return;
 
     final rewardValue = double.tryParse(_rewardController.text.trim()) ?? 50.0;
     if (rewardValue <= 0) {
@@ -212,8 +228,16 @@ class _CreateBountyState extends State<CreateBounty> {
               const BountyFieldLabel(label: 'Due Date'),
               BountyDateTimePicker(
                 selectedDate: _dueDate,
+                requireFuture: true,
+                errorText: _dueDateError,
                 onChanged: (dt) {
-                  setState(() => _dueDate = dt);
+                  setState(() {
+                    _dueDate = dt;
+                    _dueDateError = null;
+                  });
+                },
+                onInvalidSelection: (msg) {
+                  setState(() => _dueDateError = msg);
                 },
               ),
               const SizedBox(height: 24),

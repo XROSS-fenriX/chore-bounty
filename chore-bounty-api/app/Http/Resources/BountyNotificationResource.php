@@ -23,6 +23,7 @@ class BountyNotificationResource extends JsonResource
 
                 return [
                     'id' => $this->bounty->id,
+                    'creator_id' => $this->bounty->created_by,
                     'title' => $this->bounty->title,
                     'tokens' => $this->bounty->tokens(),
                 ];
