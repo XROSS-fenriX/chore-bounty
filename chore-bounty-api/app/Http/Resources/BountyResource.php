@@ -24,6 +24,7 @@ class BountyResource extends JsonResource
             'reward_description' => $this->reward_description,
             'status' => $this->status,
             'submission_proof' => $this->submission_proof,
+            'submission_images' => $this->formatSubmissionImages($request),
             'claimed_at' => $this->claimed_at,
             'submitted_at' => $this->submitted_at,
             'completed_at' => $this->completed_at,
@@ -43,5 +44,35 @@ class BountyResource extends JsonResource
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];
+    }
+
+    /**
+     * Normalize stored relative proof image paths to request-origin URLs.
+     *
+     * @return list<string>
+     */
+    private function formatSubmissionImages(Request $request): array
+    {
+        $rawImages = is_array($this->submission_images) ? $this->submission_images : [];
+        $baseUrl = rtrim($request->getSchemeAndHttpHost(), '/');
+
+        $urls = [];
+        foreach ($rawImages as $path) {
+            if (! is_string($path)) {
+                continue;
+            }
+            $trimmed = trim($path);
+            if ($trimmed === '') {
+                continue;
+            }
+            if (str_starts_with($trimmed, 'http://') || str_starts_with($trimmed, 'https://')) {
+                $urls[] = $trimmed;
+                continue;
+            }
+            $normalized = str_starts_with($trimmed, '/') ? $trimmed : '/'.$trimmed;
+            $urls[] = $baseUrl !== '' ? $baseUrl.$normalized : $normalized;
+        }
+
+        return $urls;
     }
 }

@@ -17,6 +17,8 @@ class SubmitBountyRequest extends FormRequest
             'submission_proof' => ['nullable', 'string', 'max:1000'],
             'proof_url' => ['nullable', 'string', 'max:2048'],
             'note' => ['nullable', 'string', 'max:1000'],
+            'proof_images' => ['nullable', 'array', 'max:3'],
+            'proof_images.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ];
     }
 }

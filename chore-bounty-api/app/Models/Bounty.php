@@ -26,6 +26,7 @@ class Bounty extends Model
         'reward_description',
         'status',
         'submission_proof',
+        'submission_images',
         'claimed_at',
         'submitted_at',
         'completed_at',
@@ -37,6 +38,7 @@ class Bounty extends Model
         return [
             'reward_value' => 'decimal:2',
             'xp_reward' => 'integer',
+            'submission_images' => 'array',
             'claimed_at' => 'datetime',
             'submitted_at' => 'datetime',
             'completed_at' => 'datetime',

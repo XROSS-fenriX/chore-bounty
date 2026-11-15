@@ -1236,6 +1236,7 @@ class _HomeShellState extends State<HomeShell> {
               onNotificationTap: openNotificationsPage,
               onProfileTap: () => setState(() => tab = 4),
               onViewMyTasks: () => setState(() => tab = 1),
+              onViewChores: () => setState(() => tab = 1),
               onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
             );
           },

@@ -27,9 +27,12 @@ class DashboardView extends StatefulWidget {
     this.onNotificationTap,
     this.onProfileTap,
     this.onViewMyTasks,
+    this.onViewChores,
     this.onMenuTap,
     this.notificationCount,
   });
+
+  static const int maxDisplayedChores = 5;
 
   final AppUser user;
   final Household? currentHousehold;
@@ -47,6 +50,7 @@ class DashboardView extends StatefulWidget {
   final VoidCallback? onNotificationTap;
   final VoidCallback? onProfileTap;
   final VoidCallback? onViewMyTasks;
+  final VoidCallback? onViewChores;
   final VoidCallback? onMenuTap;
   final int? notificationCount;
 
@@ -175,7 +179,6 @@ class _DashboardViewState extends State<DashboardView> {
                 emptyTitle: 'No chores awaiting approval',
                 emptySubtitle: 'Submitted chores from roommates will appear here.',
                 emptyIcon: Icons.fact_check_outlined,
-                showPostButton: false,
               ),
               const SizedBox(height: 22),
             ],
@@ -188,7 +191,8 @@ class _DashboardViewState extends State<DashboardView> {
                 emptyTitle: 'No available chores',
                 emptySubtitle: 'All household tasks are completed or claimed!',
                 emptyIcon: Icons.check_circle_outline_rounded,
-                showPostButton: true,
+                showSeeMoreButton: true,
+                showEmptyPostButton: true,
               ),
             ],
 
@@ -203,7 +207,6 @@ class _DashboardViewState extends State<DashboardView> {
                 emptyTitle: 'No ongoing chores',
                 emptySubtitle: 'Claim an available chore above to earn points!',
                 emptyIcon: Icons.assignment_outlined,
-                showPostButton: false,
               ),
             ],
           ],
@@ -218,9 +221,14 @@ class _DashboardViewState extends State<DashboardView> {
     required String emptyTitle,
     required String emptySubtitle,
     required IconData emptyIcon,
-    bool showPostButton = false,
+    bool showSeeMoreButton = false,
+    bool showEmptyPostButton = false,
   }) {
     const primaryGreen = Color(0xFF1B8354);
+    final visibleBounties = bounties.length > DashboardView.maxDisplayedChores
+        ? bounties.take(DashboardView.maxDisplayedChores).toList()
+        : bounties;
+    final seeMoreAction = widget.onViewChores ?? widget.onViewMyTasks;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -259,27 +267,31 @@ class _DashboardViewState extends State<DashboardView> {
                 ),
               ),
               const Spacer(),
-              if (showPostButton && bounties.isNotEmpty)
+              if (showSeeMoreButton && bounties.isNotEmpty)
                 Material(
                   color: const Color(0xFFECFDF5),
                   borderRadius: BorderRadius.circular(12),
                   child: InkWell(
-                    onTap: widget.onCreateBounty,
+                    onTap: seeMoreAction,
                     borderRadius: BorderRadius.circular(12),
                     child: const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.add_rounded, size: 15, color: primaryGreen),
-                          SizedBox(width: 3),
                           Text(
-                            'Post',
+                            'See more',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w800,
                               color: primaryGreen,
                             ),
+                          ),
+                          SizedBox(width: 2),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            size: 15,
+                            color: primaryGreen,
                           ),
                         ],
                       ),
@@ -290,14 +302,14 @@ class _DashboardViewState extends State<DashboardView> {
           ),
         ),
         DashboardChoreList(
-          bounties: bounties,
+          bounties: visibleBounties,
           currentUserId: widget.user.id.toString(),
           currentUserName: widget.user.name,
           onSelectBounty: widget.onSelectBounty,
           emptyIcon: emptyIcon,
           emptyTitle: emptyTitle,
           emptySubtitle: emptySubtitle,
-          showPostButton: showPostButton,
+          showPostButton: showEmptyPostButton,
           onCreateBounty: widget.onCreateBounty,
         ),
       ],

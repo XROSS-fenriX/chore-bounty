@@ -19,7 +19,12 @@ class BountyController extends Controller
             ->whereHas('household.members', function ($q) use ($request) {
                 $q->where('users.id', $request->user()->id);
             })
-            ->with(['creator', 'assignee', 'household', 'activeClaim.user'])
+            ->with([
+                'creator',
+                'assignee',
+                'household' => fn ($q) => $q->withCount(['members', 'bounties']),
+                'activeClaim.user',
+            ])
             ->latest();
 
         $householdId = $request->header('X-Household-Id') ?? $request->query('household_id');

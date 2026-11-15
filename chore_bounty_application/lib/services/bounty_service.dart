@@ -25,16 +25,55 @@ class BountyService {
   Future<List<Bounty>> all({
     String? status,
     String? householdId,
-    int perPage = 100,
+    int perPage = 25,
   }) async {
-    final query = <String, dynamic>{'per_page': perPage};
-    if (status != null && status.isNotEmpty) query['status'] = status;
-    if (householdId != null && householdId.isNotEmpty) {
-      query['household_id'] = householdId;
-    }
+    final results = <Bounty>[];
+    final seenIds = <String>{};
+    var page = 1;
+    var lastPage = 1;
+    const maxPages = 20;
 
-    final res = await api.dio.get('/bounties', queryParameters: query);
-    return _list(res.data);
+    do {
+      final query = <String, dynamic>{
+        'per_page': perPage,
+        if (page > 1) 'page': page,
+      };
+      if (status != null && status.isNotEmpty) query['status'] = status;
+      if (householdId != null && householdId.isNotEmpty) {
+        query['household_id'] = householdId;
+      }
+
+      final res = await api.dio.get('/bounties', queryParameters: query);
+      final pageItems = _list(res.data);
+      for (final item in pageItems) {
+        if (seenIds.add(item.id)) {
+          results.add(item);
+        }
+      }
+
+      lastPage = _extractLastPage(res.data);
+      if (pageItems.isEmpty) break;
+      page++;
+    } while (page <= lastPage && page <= maxPages);
+
+    return results;
+  }
+
+  int _extractLastPage(dynamic data) {
+    if (data is Map) {
+      final meta = data['meta'];
+      if (meta is Map) {
+        final rawLast = meta['last_page'];
+        if (rawLast is int) return rawLast;
+        if (rawLast is num) return rawLast.toInt();
+        if (rawLast is String) return int.tryParse(rawLast) ?? 1;
+      }
+      final rawLast = data['last_page'];
+      if (rawLast is int) return rawLast;
+      if (rawLast is num) return rawLast.toInt();
+      if (rawLast is String) return int.tryParse(rawLast) ?? 1;
+    }
+    return 1;
   }
 
   Future<Bounty> show(String id) async {
@@ -64,9 +103,38 @@ class BountyService {
     await api.dio.delete('/bounties/$id/claim');
   }
 
-  Future<void> submit(String id, {String? proof}) async {
+  Future<void> submit(
+    String id, {
+    String? proof,
+    List<String> imagePaths = const [],
+  }) async {
+    final trimmedProof = proof?.trim() ?? '';
+
+    if (imagePaths.isNotEmpty) {
+      final multipartFiles = <MultipartFile>[];
+      for (final path in imagePaths) {
+        final trimmedPath = path.trim();
+        if (trimmedPath.isEmpty) continue;
+        multipartFiles.add(await MultipartFile.fromFile(trimmedPath));
+      }
+
+      final formData = FormData.fromMap({
+        'submission_proof':
+            trimmedProof.isNotEmpty ? trimmedProof : 'Photo proof submitted',
+        'proof_images[]': multipartFiles,
+      });
+
+      await api.dio.post(
+        '/bounties/$id/submit',
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return;
+    }
+
     await api.dio.post('/bounties/$id/submit', data: {
-      'submission_proof': proof ?? 'Completed chore proof submitted.',
+      'submission_proof':
+          trimmedProof.isNotEmpty ? trimmedProof : 'Completed chore proof submitted.',
     });
   }
 

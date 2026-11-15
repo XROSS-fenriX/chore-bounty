@@ -7,7 +7,10 @@ use App\Models\BountyClaim;
 use App\Models\BountyCompletion;
 use App\Models\Household;
 use App\Models\User;
+use Database\Seeders\Apartment4AChoresSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -361,5 +364,151 @@ class ChoreStateAndIntegrityTest extends TestCase
         ])->assertStatus(201);
 
         $this->postJson('/api/bounties', $basePayload)->assertStatus(201);
+    }
+
+    public function test_apartment_4a_chores_seeder_adds_amy_farrah_fowler_and_seeds_five_chores_per_member(): void
+    {
+        $sheldon = User::factory()->create(['first_name' => 'Sheldon', 'last_name' => 'Cooper']);
+        $leonard = User::factory()->create(['first_name' => 'Leonard', 'last_name' => 'Hofstadter']);
+        $penny = User::factory()->create(['first_name' => 'Penelophe', 'last_name' => 'Hofstadter']);
+
+        $household = Household::create([
+            'name' => 'Apartment 4A',
+            'invite_code' => 'BDVAUBRV',
+            'created_by' => $leonard->id,
+        ]);
+        $household->members()->attach($leonard->id, ['role' => 'owner', 'joined_at' => now()]);
+        $household->members()->attach($sheldon->id, ['role' => 'member', 'joined_at' => now()]);
+        $household->members()->attach($penny->id, ['role' => 'member', 'joined_at' => now()]);
+
+        $this->seed(Apartment4AChoresSeeder::class);
+        $this->seed(Apartment4AChoresSeeder::class);
+
+        $amy = User::where('email', 'amy.fowler@gmail.com')->first();
+        $this->assertNotNull($amy);
+        $this->assertSame('Amy Farrah Fowler', $amy->name);
+        $this->assertSame('female', $amy->gender);
+
+        $memberIds = $household->members()->pluck('users.id')->all();
+        $this->assertContains($amy->id, $memberIds);
+        $this->assertCount(4, $memberIds);
+
+        foreach ($memberIds as $memberId) {
+            $count = Bounty::where('household_id', $household->id)
+                ->where('created_by', $memberId)
+                ->count();
+            $this->assertSame(5, $count);
+        }
+
+        $this->assertSame(20, Bounty::where('household_id', $household->id)->count());
+    }
+
+    public function test_bounties_index_sets_content_length_and_supports_gzip_compression(): void
+    {
+        [$creator, , , $household] = $this->seedHousehold();
+        for ($i = 1; $i <= 30; $i++) {
+            $this->createBounty($household, $creator, [
+                'title' => "Household Chore #$i",
+            ]);
+        }
+
+        Sanctum::actingAs($creator);
+
+        $plainResponse = $this->getJson("/api/bounties?household_id={$household->id}&per_page=100");
+        $plainResponse->assertStatus(200);
+        $this->assertTrue($plainResponse->headers->has('Content-Length'));
+        $this->assertSame(
+            (string) strlen((string) $plainResponse->getContent()),
+            $plainResponse->headers->get('Content-Length')
+        );
+
+        $gzipResponse = $this->withHeaders(['Accept-Encoding' => 'gzip'])
+            ->getJson("/api/bounties?household_id={$household->id}&per_page=100");
+        $gzipResponse->assertStatus(200);
+        $this->assertSame('gzip', $gzipResponse->headers->get('Content-Encoding'));
+        $this->assertStringContainsString('Accept-Encoding', (string) $gzipResponse->headers->get('Vary'));
+
+        $compressed = (string) $gzipResponse->getContent();
+        $this->assertSame((string) strlen($compressed), $gzipResponse->headers->get('Content-Length'));
+
+        $decoded = gzdecode($compressed);
+        $this->assertIsString($decoded);
+        $payload = json_decode($decoded, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertCount(30, $payload['data']);
+    }
+
+    public function test_submit_stores_up_to_three_proof_images_validates_files_and_reject_cleans_up(): void
+    {
+        Storage::fake('public');
+        [$creator, $member, , $household] = $this->seedHousehold();
+        $bounty = $this->createBounty($household, $creator);
+
+        Sanctum::actingAs($member);
+        $this->postJson("/api/bounties/{$bounty->id}/claim")->assertStatus(200);
+
+        // Rejects more than 3 images
+        $this->post("/api/bounties/{$bounty->id}/submit", [
+            'proof_images' => [
+                UploadedFile::fake()->image('a.jpg'),
+                UploadedFile::fake()->image('b.jpg'),
+                UploadedFile::fake()->image('c.jpg'),
+                UploadedFile::fake()->image('d.jpg'),
+            ],
+        ], ['Accept' => 'application/json'])->assertStatus(422);
+
+        // Rejects non-image uploads
+        $this->post("/api/bounties/{$bounty->id}/submit", [
+            'proof_images' => [
+                UploadedFile::fake()->create('note.txt', 10, 'text/plain'),
+            ],
+        ], ['Accept' => 'application/json'])->assertStatus(422);
+
+        // Accepts up to 3 valid images without requiring a text note
+        $submitRes = $this->post("/api/bounties/{$bounty->id}/submit", [
+            'proof_images' => [
+                UploadedFile::fake()->image('counter.jpg', 400, 300),
+                UploadedFile::fake()->image('sink.png', 400, 300),
+            ],
+        ], ['Accept' => 'application/json'])->assertStatus(200);
+
+        $data = $submitRes->json('data');
+        $this->assertSame('submitted', $data['status']);
+        $this->assertSame('Photo proof submitted', $data['submission_proof']);
+        $this->assertCount(2, $data['submission_images']);
+
+        $bounty->refresh();
+        $this->assertCount(2, $bounty->submission_images);
+        foreach ($bounty->submission_images as $urlPath) {
+            $diskPath = ltrim(str_replace('/storage/', '', $urlPath), '/');
+            Storage::disk('public')->assertExists($diskPath);
+        }
+
+        // Serves stored proof images via API route with HTTP byte-range support
+        $apiImagePath = str_replace('/storage/bounty-proofs/', '/api/bounty-proofs/', $bounty->submission_images[0]);
+        $fullBytes = Storage::disk('public')->get(
+            ltrim(str_replace('/storage/', '', $bounty->submission_images[0]), '/')
+        );
+        $chunkEnd = min(63, strlen($fullBytes) - 1);
+        $rangeRes = $this->get($apiImagePath, [
+            'Range' => "bytes=0-{$chunkEnd}",
+        ])->assertStatus(206);
+        $this->assertSame(substr($fullBytes, 0, $chunkEnd + 1), $rangeRes->getContent());
+
+        // Creator requests redo -> deletes stored proof images and resets fields
+        Sanctum::actingAs($creator);
+        $this->postJson("/api/bounties/{$bounty->id}/reject", [
+            'feedback' => 'Please upload a clearer photo',
+        ])->assertStatus(200);
+
+        $oldImages = $bounty->submission_images;
+        $bounty->refresh();
+        $this->assertSame('claimed', $bounty->status);
+        $this->assertNull($bounty->submission_images);
+        $this->assertNull($bounty->submission_proof);
+
+        foreach ($oldImages as $urlPath) {
+            $diskPath = ltrim(str_replace('/storage/', '', $urlPath), '/');
+            Storage::disk('public')->assertMissing($diskPath);
+        }
     }
 }

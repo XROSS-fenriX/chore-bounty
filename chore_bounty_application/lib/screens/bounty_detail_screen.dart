@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/app_user.dart';
 import '../models/bounty.dart';
 import '../services/bounty_service.dart';
 import '../widgets/avatar/user_avatar_widget.dart';
 import '../widgets/bounty_detail/bounty_info_card.dart';
+import '../widgets/bounty_detail/bounty_proof_gallery.dart';
+import '../widgets/bounty_detail/bounty_proof_input_card.dart';
 import '../widgets/bounty_detail/creator_action_bar.dart';
 import '../widgets/bounty_form/bounty_category_icons.dart';
 import '../widgets/ui.dart';
@@ -26,6 +29,7 @@ class BountyDetailScreen extends StatefulWidget {
     this.refreshOnOpen = false,
     this.onRefresh,
     this.onUserTap,
+    this.pickProofImage,
   });
 
   final Bounty bounty;
@@ -35,6 +39,7 @@ class BountyDetailScreen extends StatefulWidget {
   final bool refreshOnOpen;
   final Future<void> Function()? onRefresh;
   final BountyUserTapCallback? onUserTap;
+  final ProofImagePicker? pickProofImage;
 
   @override
   State<BountyDetailScreen> createState() => _BountyDetailScreenState();
@@ -43,8 +48,11 @@ class BountyDetailScreen extends StatefulWidget {
 class _BountyDetailScreenState extends State<BountyDetailScreen> {
   late TextEditingController _proofController;
   late Bounty _bounty;
+  final ImagePicker _imagePicker = ImagePicker();
+  final List<String> _selectedProofImages = [];
   bool _isLoading = false;
   String? _errorMessage;
+  String? _proofValidationError;
 
   @override
   void initState() {
@@ -196,7 +204,11 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
     final timeAgo = _formatTimeAgo(relevantTime);
 
     final proofText = _bounty.submissionProof?.trim() ?? '';
-    final showProof = proofText.isNotEmpty && !(_bounty.isClaimed && _isAssignee);
+    final proofImages = _bounty.submissionImages;
+    final hasProofImages = proofImages.isNotEmpty;
+    final showProof =
+        (proofText.isNotEmpty || hasProofImages) &&
+        !(_bounty.isClaimed && _isAssignee);
     final hasValidAssigneeId =
         (int.tryParse((_bounty.assigneeId ?? '').trim()) ?? 0) > 0;
     final assigneeAvatar = _resolveAvatar(
@@ -317,16 +329,22 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
                       color: Color(0xFF64748B),
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    proofText,
-                    style: const TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF334155),
-                      height: 1.45,
+                  if (hasProofImages) ...[
+                    const SizedBox(height: 8),
+                    BountyProofGallery(imageUrls: proofImages),
+                  ],
+                  if (proofText.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      proofText,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF334155),
+                        height: 1.45,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -359,17 +377,65 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
     }
   }
 
+  Future<void> _handlePickProofImage(ImageSource source) async {
+    if (_selectedProofImages.length >= 3) return;
+    try {
+      String? pickedPath;
+      if (widget.pickProofImage != null) {
+        pickedPath = await widget.pickProofImage!(source);
+      } else {
+        final picked = await _imagePicker.pickImage(
+          source: source,
+          maxWidth: 1280,
+          maxHeight: 1280,
+          imageQuality: 80,
+        );
+        pickedPath = picked?.path;
+      }
+
+      if (!mounted || pickedPath == null || pickedPath.trim().isEmpty) return;
+      setState(() {
+        if (_selectedProofImages.length < 3) {
+          _selectedProofImages.add(pickedPath!.trim());
+        }
+        _proofValidationError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Unable to open camera or gallery: $e';
+      });
+    }
+  }
+
+  void _handleRemoveProofImage(int index) {
+    if (index < 0 || index >= _selectedProofImages.length) return;
+    setState(() {
+      _selectedProofImages.removeAt(index);
+    });
+  }
+
   Future<void> _handleSubmit() async {
+    if (_selectedProofImages.isEmpty) {
+      setState(() {
+        _proofValidationError =
+            'Please take at least one photo as proof before submitting.';
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _proofValidationError = null;
     });
 
     try {
       final proof = _proofController.text.trim();
       await widget.service.submit(
         _bounty.id,
-        proof: proof.isEmpty ? 'Chore finished' : proof,
+        proof: proof.isEmpty ? 'Photo proof submitted' : proof,
+        imagePaths: List<String>.from(_selectedProofImages),
       );
       if (widget.onRefresh != null) await widget.onRefresh!();
       if (!mounted) return;
@@ -724,98 +790,62 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                 children: [
-                  if (_errorMessage != null)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEE2E2),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFFCA5A5)),
-                      ),
-                      child: Text(
-                        _errorMessage!,
-                        style: const TextStyle(
-                          color: Color(0xFFB91C1C),
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (_errorMessage != null)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEE2E2),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFFCA5A5)),
+                          ),
+                          child: Text(
+                            _errorMessage!,
+                            style: const TextStyle(
+                              color: Color(0xFFB91C1C),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+
+                      // TOP CARD: Minimalist Chore Overview, Description & Metadata
+                      BountyInfoCard(
+                        bounty: _bounty,
+                        formattedCategory: _formattedCategory,
+                        tokenAmount: tokenAmount,
+                        posterName: posterName,
+                        creatorAvatar: creatorAvatar,
+                        onCreatorTap: () => _handleProfileTap(
+                          rawUserId: _bounty.creatorId,
+                          name: posterName,
+                          avatarId: creatorAvatar,
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 12),
 
-                  // TOP CARD: Minimalist Chore Overview, Description & Metadata
-                  BountyInfoCard(
-                    bounty: _bounty,
-                    formattedCategory: _formattedCategory,
-                    tokenAmount: tokenAmount,
-                    posterName: posterName,
-                    creatorAvatar: creatorAvatar,
-                    onCreatorTap: () => _handleProfileTap(
-                      rawUserId: _bounty.creatorId,
-                      name: posterName,
-                      avatarId: creatorAvatar,
-                    ),
+                      // SUBMISSION INPUT SECTION (active claim by current user)
+                      if (_bounty.isClaimed && _isAssignee) ...[
+                        BountyProofInputCard(
+                          controller: _proofController,
+                          imagePaths: _selectedProofImages,
+                          onPickImage: _handlePickProofImage,
+                          onRemoveImage: _handleRemoveProofImage,
+                          validationError: _proofValidationError,
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+
+                      // CLAIMED / COMPLETED & PROOF SECTION
+                      if (_bounty.isClaimed || _bounty.isSubmitted || _bounty.isCompleted) ...[
+                        _buildClaimantSection(),
+                        const SizedBox(height: 12),
+                      ],
+                    ],
                   ),
-                  const SizedBox(height: 12),
-
-                  // SUBMISSION INPUT SECTION (active claim by current user)
-                  if (_bounty.isClaimed && _isAssignee) ...[
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Submission Note / Proof',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF0F172A),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _proofController,
-                            minLines: 2,
-                            maxLines: 4,
-                            decoration: InputDecoration(
-                              hintText: 'e.g. Wiped the counter, took recycling out',
-                              hintStyle: const TextStyle(
-                                fontSize: 13,
-                                color: Color(0xFF94A3B8),
-                              ),
-                              filled: true,
-                              fillColor: const Color(0xFFF8FAFC),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: primaryGreen, width: 1.5),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-
-                  // CLAIMED / COMPLETED & PROOF SECTION
-                  if (_bounty.isClaimed || _bounty.isSubmitted || _bounty.isCompleted) ...[
-                    _buildClaimantSection(),
-                    const SizedBox(height: 12),
-                  ],
                 ],
               ),
             ),

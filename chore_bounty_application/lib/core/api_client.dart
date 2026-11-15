@@ -39,13 +39,32 @@ class ApiClient {
           handler.next(options);
         },
         onError: (error, handler) async {
-          final path = error.requestOptions.path;
+          final requestOptions = error.requestOptions;
+          final path = requestOptions.path;
           final isAuthEndpoint =
               path.contains('/auth/login') || path.contains('/auth/register');
           if (error.response?.statusCode == 401 && !isAuthEndpoint) {
             await storage.clear();
             onUnauthorized?.call();
           }
+
+          final isIdempotentGet = requestOptions.method.toUpperCase() == 'GET';
+          final alreadyRetried = requestOptions.extra['_retried'] == true;
+          final isTransientParseError =
+              error.type == DioExceptionType.unknown &&
+              (error.error is FormatException ||
+                  error.error.toString().contains('FormatException'));
+
+          if (isIdempotentGet && !alreadyRetried && isTransientParseError) {
+            requestOptions.extra['_retried'] = true;
+            try {
+              final retryResponse = await dio.fetch<dynamic>(requestOptions);
+              return handler.resolve(retryResponse);
+            } on DioException catch (retryError) {
+              return handler.next(retryError);
+            }
+          }
+
           handler.next(error);
         },
       ),

@@ -1,3 +1,4 @@
+import '../core/api_client.dart';
 import 'app_user.dart';
 
 class Bounty {
@@ -20,6 +21,7 @@ class Bounty {
     this.reward = '',
     this.status = 'open',
     this.submissionProof,
+    this.submissionImages = const [],
     this.claimedAt,
     this.submittedAt,
     this.completedAt,
@@ -45,6 +47,7 @@ class Bounty {
   final String reward;
   final String status;
   final String? submissionProof;
+  final List<String> submissionImages;
   final DateTime? claimedAt;
   final DateTime? submittedAt;
   final DateTime? completedAt;
@@ -154,6 +157,41 @@ class Bounty {
     return (raw != null && raw.isNotEmpty) ? raw : null;
   }
 
+  static String _apiOrigin() {
+    final uri = Uri.tryParse(ApiClient.defaultBaseUrl);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) return '';
+    final portPart = uri.hasPort ? ':${uri.port}' : '';
+    return '${uri.scheme}://${uri.host}$portPart';
+  }
+
+  static List<String> _parseSubmissionImages(dynamic rawImages, dynamic fallbackUrl) {
+    final candidates = <String>[];
+    if (rawImages is List) {
+      for (final item in rawImages) {
+        final str = item?.toString().trim() ?? '';
+        if (str.isNotEmpty) candidates.add(str);
+      }
+    }
+    if (candidates.isEmpty && fallbackUrl != null) {
+      final str = fallbackUrl.toString().trim();
+      if (str.isNotEmpty &&
+          (str.startsWith('http://') ||
+              str.startsWith('https://') ||
+              str.startsWith('/storage/'))) {
+        candidates.add(str);
+      }
+    }
+
+    final origin = _apiOrigin();
+    return candidates.map((url) {
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        return url;
+      }
+      final normalized = url.startsWith('/') ? url : '/$url';
+      return origin.isNotEmpty ? '$origin$normalized' : normalized;
+    }).toList();
+  }
+
   factory Bounty.fromJson(Map<String, dynamic> j) {
     final v = j['reward_value'] ?? j['points'] ?? 0;
     final parsedValue = v is num ? v.toDouble() : double.tryParse('$v');
@@ -236,6 +274,10 @@ class Bounty {
       reward: (j['reward_description'] ?? j['reward'] ?? '').toString(),
       status: (j['status'] ?? 'open').toString(),
       submissionProof: j['submission_proof']?.toString(),
+      submissionImages: _parseSubmissionImages(
+        j['submission_images'],
+        j['proof_url'],
+      ),
       claimedAt: _parseLocalDate(j['claimed_at']),
       submittedAt: _parseLocalDate(j['submitted_at']),
       completedAt: _parseLocalDate(j['completed_at']),

@@ -24,6 +24,11 @@ Route::prefix('auth')->group(function () {
     });
 });
 
+// Serve uploaded proof images with HTTP byte-range support for reliable chunked transfers.
+Route::get('/bounty-proofs/{householdId}/{bountyId}/{filename}', [BountyActionController::class, 'serveProofImage'])
+    ->whereNumber(['householdId', 'bountyId'])
+    ->where('filename', '[A-Za-z0-9._-]+');
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', fn (Request $request) =>
         new \App\Http\Resources\UserResource($request->user())

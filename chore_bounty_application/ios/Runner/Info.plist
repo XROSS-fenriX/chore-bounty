@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>ChoreBounty needs camera access so you can take photo proof of completed chores.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>ChoreBounty needs photo library access so you can attach proof images for completed chores.</string>
 </dict>
 </plist>

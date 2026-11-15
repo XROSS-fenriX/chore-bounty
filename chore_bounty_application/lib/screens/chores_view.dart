@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import '../models/app_user.dart';
 import '../models/bounty.dart';
@@ -52,10 +54,13 @@ class _ChoresViewState extends State<ChoresView> {
     'Cancelled',
   ];
 
+  static const int pageSize = 5;
+
   String _selectedFilter = 'Available';
   String _selectedPostedStatus = 'All';
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  int _currentPage = 1;
 
   @override
   void dispose() {
@@ -223,7 +228,10 @@ class _ChoresViewState extends State<ChoresView> {
                   clipBehavior: Clip.antiAlias,
                   child: TextField(
                     controller: _searchController,
-                    onChanged: (val) => setState(() => _searchQuery = val),
+                    onChanged: (val) => setState(() {
+                      _searchQuery = val;
+                      _currentPage = 1;
+                    }),
                     style: const TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w600,
@@ -250,7 +258,10 @@ class _ChoresViewState extends State<ChoresView> {
                               ),
                               onPressed: () {
                                 _searchController.clear();
-                                setState(() => _searchQuery = '');
+                                setState(() {
+                                  _searchQuery = '';
+                                  _currentPage = 1;
+                                });
                               },
                             )
                           : null,
@@ -306,7 +317,10 @@ class _ChoresViewState extends State<ChoresView> {
                     }).toList(),
                     onChanged: (value) {
                       if (value != null) {
-                        setState(() => _selectedFilter = value);
+                        setState(() {
+                          _selectedFilter = value;
+                          _currentPage = 1;
+                        });
                       }
                     },
                   ),
@@ -323,7 +337,10 @@ class _ChoresViewState extends State<ChoresView> {
               filters: postedStatusFilters,
               scrollable: true,
               onFilterChanged: (filter) {
-                setState(() => _selectedPostedStatus = filter);
+                setState(() {
+                  _selectedPostedStatus = filter;
+                  _currentPage = 1;
+                });
               },
             ),
           ],
@@ -405,16 +422,95 @@ class _ChoresViewState extends State<ChoresView> {
 
   Widget _buildChoreList(List<Bounty> filtered) {
     final spec = _emptyStateSpec();
-    return DashboardChoreList(
-      bounties: filtered,
-      currentUserId: widget.user.id.toString(),
-      currentUserName: widget.user.name,
-      onSelectBounty: widget.onSelectBounty,
-      emptyIcon: spec.icon,
-      emptyTitle: spec.title,
-      emptySubtitle: spec.subtitle,
-      showPostButton: spec.showPostButton,
-      onCreateBounty: widget.onCreateBounty,
+    final totalCount = filtered.length;
+    final totalPages =
+        totalCount == 0 ? 1 : (totalCount / pageSize).ceil();
+    final currentPage = _currentPage.clamp(1, totalPages);
+    final startIndex = (currentPage - 1) * pageSize;
+    final endIndex = math.min(startIndex + pageSize, totalCount);
+    final pageItems = totalCount == 0
+        ? const <Bounty>[]
+        : filtered.sublist(startIndex, endIndex);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DashboardChoreList(
+          bounties: pageItems,
+          currentUserId: widget.user.id.toString(),
+          currentUserName: widget.user.name,
+          onSelectBounty: widget.onSelectBounty,
+          emptyIcon: spec.icon,
+          emptyTitle: spec.title,
+          emptySubtitle: spec.subtitle,
+          showPostButton: spec.showPostButton,
+          onCreateBounty: widget.onCreateBounty,
+        ),
+        if (totalPages > 1) ...[
+          const SizedBox(height: 16),
+          _buildPaginationBar(
+            currentPage: currentPage,
+            totalPages: totalPages,
+            startNumber: startIndex + 1,
+            endNumber: endIndex,
+            totalCount: totalCount,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPaginationBar({
+    required int currentPage,
+    required int totalPages,
+    required int startNumber,
+    required int endNumber,
+    required int totalCount,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Flexible(
+          child: Text(
+            'Showing $startNumber–$endNumber of $totalCount',
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF64748B),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _PaginationIconButton(
+              icon: Icons.chevron_left_rounded,
+              tooltip: 'Previous page',
+              enabled: currentPage > 1,
+              onTap: () => setState(() => _currentPage = currentPage - 1),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Text(
+                '$currentPage / $totalPages',
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+            ),
+            _PaginationIconButton(
+              icon: Icons.chevron_right_rounded,
+              tooltip: 'Next page',
+              enabled: currentPage < totalPages,
+              onTap: () => setState(() => _currentPage = currentPage + 1),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -459,6 +555,55 @@ class _ChoresViewState extends State<ChoresView> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PaginationIconButton extends StatelessWidget {
+  const _PaginationIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: enabled ? Colors.white : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: enabled
+                    ? const Color(0xFFE2E8F0)
+                    : const Color(0xFFF1F5F9),
+                width: 1.2,
+              ),
+            ),
+            child: Icon(
+              icon,
+              size: 20,
+              color: enabled
+                  ? const Color(0xFF0F172A)
+                  : const Color(0xFFCBD5E1),
+            ),
+          ),
+        ),
       ),
     );
   }

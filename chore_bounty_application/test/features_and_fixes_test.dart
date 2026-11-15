@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:chore_bounty_application/core/api_client.dart';
 import 'package:chore_bounty_application/core/token_storage.dart';
 import 'package:chore_bounty_application/models/app_notification.dart';
@@ -21,12 +25,14 @@ import 'package:chore_bounty_application/services/auth_service.dart';
 import 'package:chore_bounty_application/services/bounty_service.dart';
 import 'package:chore_bounty_application/services/household_service.dart';
 import 'package:chore_bounty_application/widgets/bounty_detail/bounty_status_chip.dart';
+import 'package:chore_bounty_application/widgets/bounty_detail/bounty_proof_gallery.dart';
 import 'package:chore_bounty_application/widgets/bounty_detail/creator_action_bar.dart';
 import 'package:chore_bounty_application/widgets/dialogs/congratulations_dialog.dart';
 import 'package:chore_bounty_application/widgets/ui.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker/image_picker.dart';
 
 void main() {
   group('Bounty model F2/B-02 state & UTC conversion', () {
@@ -1281,6 +1287,361 @@ void main() {
       expect(find.text('Take out trash'), findsOneWidget);
     });
   });
+
+  group('BountyService pagination & ApiClient GET retry', () {
+    test('BountyService.all aggregates paginated responses without duplicates', () async {
+      final api = ApiClient(_MemoryTokenStorage());
+      final requestedPages = <String>[];
+      api.dio.httpClientAdapter = _StubHttpAdapter((options) async {
+        final page = options.queryParameters['page']?.toString() ?? '1';
+        requestedPages.add(page);
+        final items = page == '1'
+            ? [
+                {'id': 1, 'title': 'Sweep floor', 'creator_id': 1, 'status': 'open'},
+                {'id': 2, 'title': 'Mop floor', 'creator_id': 1, 'status': 'open'},
+              ]
+            : [
+                {'id': 2, 'title': 'Mop floor', 'creator_id': 1, 'status': 'open'},
+                {'id': 3, 'title': 'Wash dishes', 'creator_id': 1, 'status': 'open'},
+              ];
+
+        return ResponseBody.fromString(
+          jsonEncode({
+            'data': items,
+            'meta': {'current_page': int.parse(page), 'last_page': 2},
+          }),
+          200,
+          headers: {
+            Headers.contentTypeHeader: ['application/json'],
+          },
+        );
+      });
+
+      final service = BountyService(api);
+      final bounties = await service.all(perPage: 2);
+
+      expect(requestedPages, ['1', '2']);
+      expect(bounties.map((b) => b.id).toList(), ['1', '2', '3']);
+    });
+
+    test('ApiClient retries idempotent GET once after transient FormatException', () async {
+      final api = ApiClient(_MemoryTokenStorage());
+      var attempts = 0;
+      api.dio.httpClientAdapter = _StubHttpAdapter((options) async {
+        attempts++;
+        if (attempts == 1) {
+          return ResponseBody.fromString(
+            '{"data":[{"id":1,"title":"Corrupted',
+            200,
+            headers: {
+              Headers.contentTypeHeader: ['application/json'],
+            },
+          );
+        }
+        return ResponseBody.fromString(
+          jsonEncode({
+            'data': [
+              {'id': 1, 'title': 'Recovered Chore', 'creator_id': 1, 'status': 'open'},
+            ],
+            'meta': {'current_page': 1, 'last_page': 1},
+          }),
+          200,
+          headers: {
+            Headers.contentTypeHeader: ['application/json'],
+          },
+        );
+      });
+
+      final service = BountyService(api);
+      final bounties = await service.all();
+
+      expect(attempts, 2);
+      expect(bounties.length, 1);
+      expect(bounties.first.title, 'Recovered Chore');
+    });
+  });
+
+  group('Dashboard limit, See more redirect, and Chores pagination', () {
+    testWidgets(
+      'DashboardView caps rendered chores to 5 and replaces + Post with See more redirecting to Chores Page',
+      (tester) async {
+        const user = AppUser(id: 1, name: 'Sheldon Cooper', email: 's@test.com');
+        final bounties = List<Bounty>.generate(
+          8,
+          (i) => Bounty(
+            id: '${i + 1}',
+            creatorId: '2',
+            creator: 'Leonard',
+            title: 'Dashboard Chore ${i + 1}',
+            status: 'open',
+            points: 10,
+          ),
+        );
+
+        var redirectedToChores = false;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: DashboardView(
+                user: user,
+                bounties: bounties,
+                leaderboard: const [],
+                isLoading: false,
+                onRefresh: () async {},
+                onSelectBounty: (_) {},
+                onCreateBounty: () {},
+                onViewChores: () => redirectedToChores = true,
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.byType(DashboardBountyCard), findsNWidgets(5));
+        expect(find.text('Dashboard Chore 5'), findsOneWidget);
+        expect(find.text('Dashboard Chore 6'), findsNothing);
+        expect(find.text('8'), findsOneWidget);
+        expect(find.text('Post'), findsNothing);
+        expect(find.text('See more'), findsOneWidget);
+
+        await tester.tap(find.text('See more'));
+        await tester.pump();
+        expect(redirectedToChores, isTrue);
+      },
+    );
+
+    testWidgets('ChoresView paginates chore list to 5 items per page', (
+      tester,
+    ) async {
+      const user = AppUser(id: 1, name: 'Sheldon Cooper', email: 's@test.com');
+      final bounties = List<Bounty>.generate(
+        12,
+        (i) => Bounty(
+          id: '${i + 1}',
+          creatorId: '2',
+          creator: 'Leonard',
+          title: 'Chore Item ${i + 1}',
+          status: 'open',
+          points: 15,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ChoresView(
+              user: user,
+              bounties: bounties,
+              isLoading: false,
+              onRefresh: () async {},
+              onSelectBounty: (_) {},
+              onCreateBounty: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(DashboardBountyCard), findsNWidgets(5));
+      expect(find.text('Chore Item 1'), findsOneWidget);
+      expect(find.text('Chore Item 5'), findsOneWidget);
+      expect(find.text('Chore Item 6'), findsNothing);
+      expect(find.text('Showing 1–5 of 12'), findsOneWidget);
+      expect(find.text('1 / 3'), findsOneWidget);
+
+      await tester.drag(find.byType(ListView), const Offset(0, -500));
+      await tester.pumpAndSettle();
+
+      final nextBtn = find.byTooltip('Next page');
+      await tester.tap(nextBtn);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DashboardBountyCard), findsNWidgets(5));
+      expect(find.text('Chore Item 6'), findsOneWidget);
+      expect(find.text('Chore Item 10'), findsOneWidget);
+      expect(find.text('Chore Item 1'), findsNothing);
+      expect(find.text('Showing 6–10 of 12'), findsOneWidget);
+      expect(find.text('2 / 3'), findsOneWidget);
+
+      await tester.drag(find.byType(ListView), const Offset(0, -500));
+      await tester.pumpAndSettle();
+      await tester.tap(nextBtn);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DashboardBountyCard), findsNWidgets(2));
+      expect(find.text('Chore Item 11'), findsOneWidget);
+      expect(find.text('Chore Item 12'), findsOneWidget);
+      expect(find.text('Showing 11–12 of 12'), findsOneWidget);
+      expect(find.text('3 / 3'), findsOneWidget);
+
+      await tester.drag(find.byType(ListView), const Offset(0, 500));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Chore Item 12');
+      await tester.pump();
+
+      expect(find.byType(DashboardBountyCard), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(DashboardBountyCard),
+          matching: find.text('Chore Item 12'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byTooltip('Next page'), findsNothing);
+    });
+  });
+
+  group('Camera photo submission proof', () {
+    test('Bounty.fromJson parses and normalizes submission_images URLs', () {
+      final bounty = Bounty.fromJson({
+        'id': 9,
+        'title': 'Clean stove',
+        'creator_id': 1,
+        'status': 'submitted',
+        'submission_proof': 'Done',
+        'submission_images': [
+          '/storage/bounty-proofs/2/9/photo1.jpg',
+          'https://cdn.example.com/photo2.jpg',
+        ],
+      });
+
+      expect(bounty.submissionImages.length, 2);
+      expect(
+        bounty.submissionImages.first,
+        endsWith('/storage/bounty-proofs/2/9/photo1.jpg'),
+      );
+      expect(
+        bounty.submissionImages.last,
+        'https://cdn.example.com/photo2.jpg',
+      );
+    });
+
+    testWidgets(
+      'BountyDetailScreen requires camera/gallery photo before submit and uploads captured photos',
+      (tester) async {
+        final tempDir = Directory.systemTemp.createTempSync('proof_test_');
+        addTearDown(() => tempDir.deleteSync(recursive: true));
+        final pngBytes = base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        );
+        final samplePhoto = File('${tempDir.path}/proof.png')
+          ..writeAsBytesSync(pngBytes);
+
+        const assignee = AppUser(
+          id: 2,
+          name: 'Amy Farrah Fowler',
+          email: 'amy@example.com',
+        );
+        const claimed = Bounty(
+          id: '42',
+          householdId: '2',
+          creatorId: '1',
+          creator: 'Sheldon Cooper',
+          assigneeId: '2',
+          assignee: 'Amy Farrah Fowler',
+          title: 'Wipe kitchen counter',
+          status: 'claimed',
+          points: 30,
+        );
+
+        final fakeService = _FakeSubmitBountyService();
+        ImageSource? requestedSource;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: BountyDetailScreen(
+              bounty: claimed,
+              currentUser: assignee,
+              service: fakeService,
+              pickProofImage: (source) async {
+                requestedSource = source;
+                return samplePhoto.path;
+              },
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('Open Camera'), findsOneWidget);
+        expect(find.text('0 / 3 Photos'), findsOneWidget);
+
+        // Submitting without a photo shows validation error and skips API call
+        await tester.tap(find.text('Submit for Review'));
+        await tester.pump();
+
+        expect(
+          find.text('Please take at least one photo as proof before submitting.'),
+          findsOneWidget,
+        );
+        expect(fakeService.submitCalls, 0);
+
+        // Capturing photo via Open Camera attaches preview
+        await tester.tap(find.text('Open Camera'));
+        await tester.pumpAndSettle();
+
+        expect(requestedSource, ImageSource.camera);
+        expect(find.text('1 / 3 Photos'), findsOneWidget);
+
+        // Removing photo clears preview
+        await tester.tap(find.byTooltip('Remove photo 1'));
+        await tester.pump();
+        expect(find.text('0 / 3 Photos'), findsOneWidget);
+
+        // Capture again, add note, and submit
+        await tester.tap(find.text('Open Camera'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byType(TextField),
+          'Cleaned stovetop and counter',
+        );
+        await tester.tap(find.text('Submit for Review'));
+        await tester.pumpAndSettle();
+
+        expect(fakeService.submitCalls, 1);
+        expect(fakeService.lastProof, 'Cleaned stovetop and counter');
+        expect(fakeService.lastImagePaths, [samplePhoto.path]);
+      },
+    );
+
+    testWidgets(
+      'BountyDetailScreen renders BountyProofGallery when submitted chore has submissionImages',
+      (tester) async {
+        const creator = AppUser(
+          id: 1,
+          name: 'Sheldon Cooper',
+          email: 'sheldon@example.com',
+        );
+        const submitted = Bounty(
+          id: '43',
+          householdId: '2',
+          creatorId: '1',
+          creator: 'Sheldon Cooper',
+          assigneeId: '2',
+          assignee: 'Amy Farrah Fowler',
+          title: 'Wipe kitchen counter',
+          status: 'submitted',
+          submissionProof: 'Counters spotless',
+          submissionImages: ['https://example.com/proof1.jpg'],
+          points: 30,
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: BountyDetailScreen(
+              bounty: submitted,
+              currentUser: creator,
+              service: _FakeSubmitBountyService(),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('Proof Submitted'), findsOneWidget);
+        expect(find.byType(BountyProofGallery), findsOneWidget);
+        expect(find.text('Counters spotless'), findsOneWidget);
+      },
+    );
+  });
 }
 
 class _MemoryTokenStorage extends TokenStorage {
@@ -1412,4 +1773,40 @@ class _FakeCreateBountyService extends BountyService {
     createCalls++;
     lastCreatedPayload = data;
   }
+}
+
+class _FakeSubmitBountyService extends BountyService {
+  _FakeSubmitBountyService() : super(ApiClient(_MemoryTokenStorage()));
+
+  int submitCalls = 0;
+  String? lastProof;
+  List<String> lastImagePaths = const [];
+
+  @override
+  Future<void> submit(
+    String id, {
+    String? proof,
+    List<String> imagePaths = const [],
+  }) async {
+    submitCalls++;
+    lastProof = proof;
+    lastImagePaths = List<String>.from(imagePaths);
+  }
+}
+
+class _StubHttpAdapter implements HttpClientAdapter {
+  _StubHttpAdapter(this._handler);
+
+  final Future<ResponseBody> Function(RequestOptions options) _handler;
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) =>
+      _handler(options);
 }

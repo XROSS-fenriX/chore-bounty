@@ -13,6 +13,7 @@ class BountyCompletion extends Model
         'reviewed_by',
         'submission_note',
         'proof_url',
+        'proof_images',
         'status',
         'submitted_at',
         'reviewed_at',
@@ -21,6 +22,7 @@ class BountyCompletion extends Model
     protected function casts(): array
     {
         return [
+            'proof_images' => 'array',
             'submitted_at' => 'datetime',
             'reviewed_at' => 'datetime',
         ];

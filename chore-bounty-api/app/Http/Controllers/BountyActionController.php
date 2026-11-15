@@ -11,6 +11,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\Response;
 
 class BountyActionController extends Controller
 {
@@ -88,30 +90,63 @@ class BountyActionController extends Controller
         Gate::authorize('submit', $bounty);
 
         $user = $request->user();
-        $proof = $request->validated('submission_proof')
+        $rawProof = $request->validated('submission_proof')
             ?? $request->validated('proof_url')
-            ?? $request->validated('note')
-            ?? 'Chore completed';
+            ?? $request->validated('note');
+        $trimmedProof = is_string($rawProof) ? trim($rawProof) : '';
 
-        DB::transaction(function () use ($user, $bounty, $proof) {
-            $lockedBounty = Bounty::whereKey($bounty->id)->lockForUpdate()->firstOrFail();
+        $uploadedFiles = $request->file('proof_images', []);
+        $storedUrls = [];
+        $storedDiskPaths = [];
 
-            $lockedBounty->update([
-                'submission_proof' => $proof,
-                'status' => 'submitted',
-                'submitted_at' => now(),
-            ]);
+        foreach ($uploadedFiles as $file) {
+            $diskPath = Storage::disk('public')->putFile(
+                "bounty-proofs/{$bounty->household_id}/{$bounty->id}",
+                $file
+            );
+            if ($diskPath !== false) {
+                $storedDiskPaths[] = $diskPath;
+                $storedUrls[] = '/storage/'.ltrim($diskPath, '/');
+            }
+        }
 
-            // Synchronize with bounty_completions
-            $activeClaim = $lockedBounty->claims()->where('user_id', $user->id)->where('status', 'active')->first();
-            if ($activeClaim) {
-                $activeClaim->completions()->create([
-                    'submission_note' => $proof,
-                    'status' => 'pending',
+        $proof = $trimmedProof !== ''
+            ? $trimmedProof
+            : (! empty($storedUrls) ? 'Photo proof submitted' : 'Chore completed');
+
+        $previousImages = $bounty->submission_images;
+
+        try {
+            DB::transaction(function () use ($user, $bounty, $proof, $storedUrls, $request) {
+                $lockedBounty = Bounty::whereKey($bounty->id)->lockForUpdate()->firstOrFail();
+
+                $lockedBounty->update([
+                    'submission_proof' => $proof,
+                    'submission_images' => ! empty($storedUrls) ? $storedUrls : null,
+                    'status' => 'submitted',
                     'submitted_at' => now(),
                 ]);
+
+                // Synchronize with bounty_completions
+                $activeClaim = $lockedBounty->claims()->where('user_id', $user->id)->where('status', 'active')->first();
+                if ($activeClaim) {
+                    $activeClaim->completions()->create([
+                        'submission_note' => $proof,
+                        'proof_url' => $storedUrls[0] ?? $request->validated('proof_url'),
+                        'proof_images' => ! empty($storedUrls) ? $storedUrls : null,
+                        'status' => 'pending',
+                        'submitted_at' => now(),
+                    ]);
+                }
+            });
+        } catch (\Throwable $e) {
+            if (! empty($storedDiskPaths)) {
+                Storage::disk('public')->delete($storedDiskPaths);
             }
-        });
+            throw $e;
+        }
+
+        $this->deleteStoredProofImages(is_array($previousImages) ? $previousImages : []);
 
         $fresh = $bounty->fresh()->load(['creator', 'assignee', 'household']);
         BountyNotification::dispatchToUser(
@@ -247,12 +282,16 @@ class BountyActionController extends Controller
         $user = $request->user();
         $feedback = trim((string) ($request->validated('feedback') ?? ''));
 
+        $previousImages = $bounty->submission_images;
+
         DB::transaction(function () use ($user, $bounty) {
             $lockedBounty = Bounty::whereKey($bounty->id)->lockForUpdate()->firstOrFail();
 
             $lockedBounty->update([
                 'status' => 'claimed',
                 'submitted_at' => null,
+                'submission_proof' => null,
+                'submission_images' => null,
             ]);
 
             $activeClaim = $lockedBounty->claims()->where('status', 'active')->first();
@@ -267,6 +306,8 @@ class BountyActionController extends Controller
                 }
             }
         });
+
+        $this->deleteStoredProofImages(is_array($previousImages) ? $previousImages : []);
 
         $fresh = $bounty->fresh()->load(['creator', 'assignee', 'household']);
         if ($fresh->assignee_id) {
@@ -333,5 +374,102 @@ class BountyActionController extends Controller
             'message' => 'Bounty cancelled.',
             'data' => new BountyResource($fresh),
         ]);
+    }
+
+    /**
+     * Serve an uploaded proof image with optional HTTP byte-range chunking.
+     */
+    public function serveProofImage(
+        Request $request,
+        int $householdId,
+        int $bountyId,
+        string $filename,
+    ): Response {
+        if ($filename === '' || str_contains($filename, '..')) {
+            abort(404);
+        }
+
+        $relativePath = "bounty-proofs/{$householdId}/{$bountyId}/{$filename}";
+        $disk = Storage::disk('public');
+        if (! $disk->exists($relativePath)) {
+            abort(404);
+        }
+
+        $size = (int) $disk->size($relativePath);
+        $mime = $disk->mimeType($relativePath) ?: 'image/jpeg';
+        $rangeHeader = trim((string) $request->header('Range', ''));
+
+        $headers = [
+            'Content-Type' => $mime,
+            'Accept-Ranges' => 'bytes',
+            'Cache-Control' => 'public, max-age=86400',
+        ];
+
+        if ($size > 0 && preg_match('/^bytes=(\d*)-(\d*)$/i', $rangeHeader, $matches)) {
+            $start = $matches[1] !== '' ? (int) $matches[1] : 0;
+            $end = $matches[2] !== '' ? min((int) $matches[2], $size - 1) : ($size - 1);
+
+            if ($start > $end || $start >= $size) {
+                return response('', 416, [
+                    'Content-Range' => "bytes */{$size}",
+                ]);
+            }
+
+            $length = $end - $start + 1;
+            $stream = $disk->readStream($relativePath);
+            if ($stream === false) {
+                abort(404);
+            }
+
+            try {
+                if ($start > 0) {
+                    fseek($stream, $start);
+                }
+                $slice = '';
+                $remaining = $length;
+                while ($remaining > 0 && ! feof($stream)) {
+                    $chunk = fread($stream, $remaining);
+                    if ($chunk === false || $chunk === '') {
+                        break;
+                    }
+                    $slice .= $chunk;
+                    $remaining -= strlen($chunk);
+                }
+            } finally {
+                fclose($stream);
+            }
+
+            return response($slice, 206, array_merge($headers, [
+                'Content-Range' => "bytes {$start}-{$end}/{$size}",
+                'Content-Length' => (string) strlen($slice),
+            ]));
+        }
+
+        $content = (string) $disk->get($relativePath);
+
+        return response($content, 200, array_merge($headers, [
+            'Content-Length' => (string) strlen($content),
+        ]));
+    }
+
+    /**
+     * Remove stored public disk files referenced by /storage/... paths.
+     */
+    private function deleteStoredProofImages(array $paths): void
+    {
+        $diskPaths = [];
+        foreach ($paths as $path) {
+            if (! is_string($path)) {
+                continue;
+            }
+            $relative = ltrim(preg_replace('#^/storage/#', '', trim($path)) ?? '', '/');
+            if ($relative !== '' && ! str_contains($relative, '://')) {
+                $diskPaths[] = $relative;
+            }
+        }
+
+        if (! empty($diskPaths)) {
+            Storage::disk('public')->delete($diskPaths);
+        }
     }
 }
