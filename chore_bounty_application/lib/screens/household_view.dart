@@ -81,9 +81,6 @@ class HouseholdView extends StatelessWidget {
         (household.isOwner ||
             (household.createdBy != null &&
                 household.createdBy == currentUser.id));
-    final eligibleTransferMembers = sortedMembers
-        .where((m) => !m.isOwner && m.userId != currentUser.id)
-        .toList();
 
     return RefreshIndicator(
       onRefresh: onRefresh,
@@ -172,12 +169,36 @@ class HouseholdView extends StatelessWidget {
                   isCurrentOwner: isCurrentOwner,
                 ),
               ),
-            _buildHouseholdActions(
-              context,
-              household,
-              isCurrentOwner: isCurrentOwner,
-              eligibleTransferMembers: eligibleTransferMembers,
-            ),
+            if (onLeaveHousehold != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    onPressed: () => onLeaveHousehold!(household),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFDC2626),
+                      backgroundColor: const Color(0xFFFEF2F2),
+                      side: const BorderSide(
+                        color: Color(0xFFFECACA),
+                        width: 1.2,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    icon: const Icon(Icons.logout_rounded, size: 19),
+                    label: const Text(
+                      'Leave Household',
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ],
       ),
@@ -247,160 +268,6 @@ class HouseholdView extends StatelessWidget {
     );
     if (confirmed == true && onRemoveMember != null) {
       await onRemoveMember!(household, member);
-    }
-  }
-
-  Future<void> _showTransferOwnershipPicker(
-    BuildContext context,
-    Household household,
-    List<HouseholdMember> candidates,
-  ) async {
-    final selected = await showDialog<HouseholdMember>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-          side: const BorderSide(color: Color(0xFFE2E8F0)),
-        ),
-        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-        contentPadding: const EdgeInsets.fromLTRB(24, 14, 24, 16),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        title: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: const BoxDecoration(
-                color: Color(0xFFFEF3C7),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.swap_horiz_rounded,
-                color: Color(0xFFB45309),
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                'Transfer Ownership',
-                style: TextStyle(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF0F172A),
-                  letterSpacing: -0.3,
-                ),
-              ),
-            ),
-          ],
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Select a roommate to become the new owner of ${household.name}.',
-                style: const TextStyle(
-                  fontSize: 13.5,
-                  height: 1.45,
-                  color: Color(0xFF475569),
-                ),
-              ),
-              const SizedBox(height: 14),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 240),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: candidates.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (_, index) {
-                    final member = candidates[index];
-                    return Material(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(14),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () => Navigator.pop(dialogContext, member),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: const Color(0xFFE2E8F0),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              UserAvatarWidget(
-                                avatarId: member.avatar,
-                                userName: member.name,
-                                size: 38,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  member.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 14.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF0F172A),
-                                  ),
-                                ),
-                              ),
-                              const Icon(
-                                Icons.chevron_right_rounded,
-                                color: Color(0xFF94A3B8),
-                                size: 20,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF475569),
-                backgroundColor: const Color(0xFFF8FAFC),
-                side: const BorderSide(color: Color(0xFFE2E8F0)),
-                elevation: 0,
-                minimumSize: const Size(0, 44),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (selected != null && context.mounted) {
-      await _confirmTransferOwnership(context, household, selected);
     }
   }
 
@@ -509,83 +376,6 @@ class HouseholdView extends StatelessWidget {
     if (confirmed == true && onTransferOwnership != null) {
       await onTransferOwnership!(household, member);
     }
-  }
-
-  Widget _buildHouseholdActions(
-    BuildContext context,
-    Household household, {
-    required bool isCurrentOwner,
-    required List<HouseholdMember> eligibleTransferMembers,
-  }) {
-    final showTransfer = isCurrentOwner &&
-        onTransferOwnership != null &&
-        eligibleTransferMembers.isNotEmpty;
-    final showLeave = onLeaveHousehold != null;
-
-    if (!showTransfer && !showLeave) {
-      return const SizedBox.shrink();
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (showTransfer) ...[
-            SizedBox(
-              height: 48,
-              child: OutlinedButton.icon(
-                onPressed: () => _showTransferOwnershipPicker(
-                  context,
-                  household,
-                  eligibleTransferMembers,
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFB45309),
-                  backgroundColor: const Color(0xFFFFFBEB),
-                  side: const BorderSide(
-                    color: Color(0xFFFDE68A),
-                    width: 1.2,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                icon: const Icon(Icons.swap_horiz_rounded, size: 19),
-                label: const Text(
-                  'Transfer Ownership',
-                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
-                ),
-              ),
-            ),
-            if (showLeave) const SizedBox(height: 10),
-          ],
-          if (showLeave)
-            SizedBox(
-              height: 48,
-              child: OutlinedButton.icon(
-                onPressed: () => onLeaveHousehold!(household),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFDC2626),
-                  backgroundColor: const Color(0xFFFEF2F2),
-                  side: const BorderSide(
-                    color: Color(0xFFFECACA),
-                    width: 1.2,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                icon: const Icon(Icons.logout_rounded, size: 19),
-                label: const Text(
-                  'Leave Household',
-                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
   }
 
   Widget _buildHouseholdHero(

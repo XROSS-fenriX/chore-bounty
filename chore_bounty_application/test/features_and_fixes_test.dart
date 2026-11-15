@@ -2539,17 +2539,12 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Transfer Ownership'), findsOneWidget);
+        expect(find.text('Transfer Ownership'), findsNothing);
         expect(find.byTooltip('Transfer ownership'), findsOneWidget);
         expect(find.text('Leave Household'), findsOneWidget);
 
-        // Owner picks member via Transfer Ownership button and confirms.
-        await tester.ensureVisible(find.text('Transfer Ownership'));
-        await tester.tap(find.text('Transfer Ownership'));
-        await tester.pumpAndSettle();
-
-        expect(find.text('Select a roommate to become the new owner of Apt 4A.'), findsOneWidget);
-        await tester.tap(find.text('Leonard Hofstadter').last);
+        // Owner taps inline Transfer ownership button and confirms.
+        await tester.tap(find.byTooltip('Transfer ownership'));
         await tester.pumpAndSettle();
 
         expect(find.text('Make Leonard Hofstadter owner?'), findsOneWidget);
