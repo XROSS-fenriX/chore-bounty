@@ -19,6 +19,7 @@ import 'package:chore_bounty_application/screens/welcome_screen.dart';
 import 'package:chore_bounty_application/widgets/bounty_form/bounty_category_icons.dart';
 import 'package:chore_bounty_application/widgets/bounty_form/bounty_date_time_picker.dart';
 import 'package:chore_bounty_application/widgets/dashboard/dashboard_bounty_card.dart';
+import 'package:chore_bounty_application/widgets/dashboard/dashboard_header.dart';
 import 'package:chore_bounty_application/widgets/dashboard/dashboard_filter_pills.dart';
 import 'package:chore_bounty_application/widgets/leaderboard/leaderboard_podium.dart';
 import 'package:chore_bounty_application/services/auth_service.dart';
@@ -2298,6 +2299,40 @@ void main() {
       expect(viewed, isTrue);
       expect(find.byType(RedoRequestedDialog), findsNothing);
     });
+  });
+
+  group('DashboardHeader unread count badge', () {
+    testWidgets(
+      'hides badge at 0, shows exact unread count, and caps at 99+',
+      (tester) async {
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(
+              body: DashboardHeader(notificationCount: 0),
+            ),
+          ),
+        );
+        expect(find.text('0'), findsNothing);
+
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(
+              body: DashboardHeader(notificationCount: 7),
+            ),
+          ),
+        );
+        expect(find.text('7'), findsOneWidget);
+
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(
+              body: DashboardHeader(notificationCount: 120),
+            ),
+          ),
+        );
+        expect(find.text('99+'), findsOneWidget);
+      },
+    );
   });
 }
 

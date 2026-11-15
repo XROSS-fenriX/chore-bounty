@@ -66,6 +66,7 @@ class DashboardHeader extends StatelessWidget {
                   height: 44,
                   child: Stack(
                     alignment: Alignment.center,
+                    clipBehavior: Clip.none,
                     children: [
                       const Icon(
                         Icons.notifications_none_rounded,
@@ -74,14 +75,37 @@ class DashboardHeader extends StatelessWidget {
                       ),
                       if (notificationCount > 0)
                         Positioned(
-                          top: 10,
-                          right: 11,
+                          top: 3,
+                          right: 2,
                           child: Container(
-                            width: 7,
-                            height: 7,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFEF4444),
-                              shape: BoxShape.circle,
+                            constraints: const BoxConstraints(
+                              minWidth: 18,
+                              minHeight: 18,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 1.5,
+                            ),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEF4444),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Text(
+                              notificationCount > 99
+                                  ? '99+'
+                                  : '$notificationCount',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                height: 1.0,
+                              ),
                             ),
                           ),
                         ),
