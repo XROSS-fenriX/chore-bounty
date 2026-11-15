@@ -27,6 +27,8 @@ class Bounty {
     this.completedAt,
     this.dueAt,
     this.createdAt,
+    this.isCreatorActiveMember = true,
+    this.isViewerActiveMember = true,
   });
 
   final String id;
@@ -53,6 +55,8 @@ class Bounty {
   final DateTime? completedAt;
   final DateTime? dueAt;
   final DateTime? createdAt;
+  final bool isCreatorActiveMember;
+  final bool isViewerActiveMember;
 
   bool get isOpen => status == 'open' || status == 'available';
   bool get isPastDue =>
@@ -69,6 +73,47 @@ class Bounty {
   bool get canEdit => isAvailable || isTaken;
   bool get canCancel => isAvailable || isTaken;
   bool get canDelete => isAvailable || isCancelled || isExpired;
+
+  /// Enforces departure visibility rules on the client:
+  /// - If the viewer has left the chore's household, only `completed` chores
+  ///   executed by other household members remain visible.
+  /// - If the chore's creator left the household, only `completed` chores
+  ///   executed by another household member remain visible.
+  bool isVisibleForHousehold({
+    required String currentUserId,
+    Set<String>? memberHouseholdIds,
+    Set<String>? activeMemberIds,
+    String? activeHouseholdId,
+  }) {
+    final viewerIsMember = isViewerActiveMember &&
+        (memberHouseholdIds == null ||
+            householdId.isEmpty ||
+            memberHouseholdIds.contains(householdId));
+
+    if (!viewerIsMember) {
+      return isCompleted &&
+          assigneeId != null &&
+          assigneeId!.isNotEmpty &&
+          assigneeId != currentUserId;
+    }
+
+    final checkCreatorRoster = activeMemberIds != null &&
+        creatorId.isNotEmpty &&
+        (activeHouseholdId == null ||
+            householdId.isEmpty ||
+            householdId == activeHouseholdId);
+    final creatorIsMember =
+        isCreatorActiveMember && (!checkCreatorRoster || activeMemberIds.contains(creatorId));
+
+    if (!creatorIsMember) {
+      return isCompleted &&
+          assigneeId != null &&
+          assigneeId!.isNotEmpty &&
+          assigneeId != creatorId;
+    }
+
+    return true;
+  }
 
   String get statusLabel {
     if (isCancelled) return 'Cancelled';
@@ -283,6 +328,15 @@ class Bounty {
       completedAt: _parseLocalDate(j['completed_at']),
       dueAt: _parseLocalDate(j['due_at']),
       createdAt: _parseLocalDate(j['created_at']),
+      isCreatorActiveMember: _parseBoolDefaultTrue(j['is_creator_active_member']),
+      isViewerActiveMember: _parseBoolDefaultTrue(j['is_viewer_active_member']),
     );
+  }
+
+  static bool _parseBoolDefaultTrue(dynamic value) {
+    if (value == null) return true;
+    if (value is bool) return value;
+    final normalized = value.toString().trim().toLowerCase();
+    return normalized == 'true' || normalized == '1';
   }
 }

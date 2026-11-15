@@ -25,6 +25,8 @@ class UserDetailScreen extends StatelessWidget {
     this.activeCount = 0,
     this.household,
     this.bounties = const [],
+    this.memberHouseholdIds,
+    this.activeMemberIds,
     this.bountyService,
     this.memberAvatars = const {},
     this.onRefresh,
@@ -78,15 +80,30 @@ class UserDetailScreen extends StatelessWidget {
   final int activeCount;
   final Household? household;
   final List<Bounty> bounties;
+  final Set<String>? memberHouseholdIds;
+  final Set<String>? activeMemberIds;
   final BountyService? bountyService;
   final Map<String, String> memberAvatars;
   final Future<void> Function()? onRefresh;
   final BountyUserTapCallback? onUserTap;
 
+  List<Bounty> get _visibleBounties => bounties
+      .where(
+        (b) => b.isVisibleForHousehold(
+          currentUserId: currentUser.id.toString(),
+          memberHouseholdIds: memberHouseholdIds,
+          activeMemberIds: activeMemberIds,
+          activeHouseholdId: household?.id.toString(),
+        ),
+      )
+      .toList();
+
   int get _effectiveCompletedCount {
     if (completedCount > 0) return completedCount;
     final uid = userId.toString();
-    return bounties.where((b) => b.assigneeId == uid && b.isCompleted).length;
+    return _visibleBounties
+        .where((b) => b.assigneeId == uid && b.isCompleted)
+        .length;
   }
 
   Future<void> _openBounty(BuildContext context, Bounty bounty) async {
@@ -170,7 +187,7 @@ class UserDetailScreen extends StatelessWidget {
               userName: name,
               currentUserId: currentUser.id.toString(),
               currentUserName: currentUser.name,
-              bounties: bounties,
+              bounties: _visibleBounties,
               onSelectBounty: (bounty) => _openBounty(context, bounty),
             ),
           ],

@@ -87,14 +87,40 @@ class _HomeShellState extends State<HomeShell> {
   int get _unreadNotificationCount {
     final uid = currentUser.id.toString();
     final uname = currentUser.name;
-    if (_latestNotifications.isNotEmpty) {
+    final hId = currentHousehold?.id.toString();
+    if (_hasCompletedInitialNotificationLoad || _latestNotifications.isNotEmpty) {
       return _latestNotifications
-          .where((n) => !n.isRead && n.isVisibleTo(uid, uname))
+          .where((n) => !n.isRead && n.isVisibleTo(uid, uname, hId))
           .length;
     }
     return _latestBounties
-        .where((b) => b.creatorId == uid && b.isSubmitted)
+        .where(
+          (b) =>
+              b.creatorId == uid &&
+              b.isSubmitted &&
+              (hId == null || b.householdId.isEmpty || b.householdId == hId),
+        )
         .length;
+  }
+
+  Set<String>? get _memberHouseholdIds =>
+      isHouseholdsLoading && myHouseholds.isEmpty
+          ? null
+          : myHouseholds.map((h) => h.id.toString()).toSet();
+
+  Set<String>? get _activeMemberIds => _latestMembers.isEmpty
+      ? null
+      : _latestMembers.map((m) => m.userId.toString()).toSet();
+
+  void _resetHouseholdScopedState() {
+    _latestBounties = const [];
+    _latestLeaderboard = const [];
+    _latestMembers = const [];
+    _latestNotifications = const [];
+    _seenNotificationIds.clear();
+    _celebratedIds.clear();
+    _hasCompletedInitialNotificationLoad = false;
+    _lastCompletedCount = null;
   }
 
   @override
@@ -261,6 +287,7 @@ class _HomeShellState extends State<HomeShell> {
 
     setState(() {
       currentHousehold = h;
+      _resetHouseholdScopedState();
     });
 
     await refresh();
@@ -313,8 +340,9 @@ class _HomeShellState extends State<HomeShell> {
   }) {
     final uid = currentUser.id.toString();
     final uname = currentUser.name;
+    final hId = currentHousehold?.id.toString();
     final filtered = notifications
-        .where((n) => n.isVisibleTo(uid, uname))
+        .where((n) => n.isVisibleTo(uid, uname, hId))
         .toList();
 
     final approvalsToCelebrate = <AppNotification>[];
@@ -456,6 +484,9 @@ class _HomeShellState extends State<HomeShell> {
       if (mounted) {
         _lastCompletedCount = bounties.where((b) => b.isCompleted).length;
         setState(() {
+          _latestBounties = bounties;
+          _latestLeaderboard = lb;
+          _latestMembers = members;
           _syncMemberAvatars(bounties, lb, members: members);
           _processNotifications(notifications);
         });
@@ -474,6 +505,8 @@ class _HomeShellState extends State<HomeShell> {
 
   Future<void> logout() async {
     try {
+      _realtimeTimer?.cancel();
+      widget.bounties.clearSessionCache();
       await widget.auth.logout();
 
       if (!mounted) return;
@@ -538,8 +571,9 @@ class _HomeShellState extends State<HomeShell> {
   Future<void> openNotificationsPage() async {
     final uid = currentUser.id.toString();
     final uname = currentUser.name;
+    final hId = currentHousehold?.id.toString();
     final filteredNotifications = _latestNotifications
-        .where((n) => !n.isTriggeredBy(uid, uname))
+        .where((n) => n.isVisibleTo(uid, uname, hId))
         .toList();
     await Navigator.push<void>(
       context,
@@ -804,6 +838,7 @@ class _HomeShellState extends State<HomeShell> {
       try {
         await widget.households.leave(h.id);
         if (!mounted) return;
+        setState(_resetHouseholdScopedState);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Left ${h.name}')),
         );
@@ -1220,6 +1255,8 @@ class _HomeShellState extends State<HomeShell> {
               user: currentUser,
               currentHousehold: currentHousehold,
               myHouseholds: myHouseholds,
+              memberHouseholdIds: _memberHouseholdIds,
+              activeMemberIds: _activeMemberIds,
               bounties: bountiesList,
               leaderboard: leaderboardList,
               isLoading: isLoading,
@@ -1261,6 +1298,8 @@ class _HomeShellState extends State<HomeShell> {
         return ChoresView(
           user: currentUser,
           currentHousehold: currentHousehold,
+          memberHouseholdIds: _memberHouseholdIds,
+          activeMemberIds: _activeMemberIds,
           bounties: bountiesList,
           isLoading: isLoading,
           errorMessage: errorMessage,
@@ -1372,6 +1411,8 @@ class _HomeShellState extends State<HomeShell> {
       currentUser: currentUser,
       currentHousehold: currentHousehold,
       myHouseholds: myHouseholds,
+      memberHouseholdIds: _memberHouseholdIds,
+      activeMemberIds: _activeMemberIds,
       leaderboardEntry: myEntry,
       member: myMember,
       bounties: _latestBounties,
@@ -1430,6 +1471,8 @@ class _HomeShellState extends State<HomeShell> {
           activeCount: matchedEntry?.activeCount ?? 0,
           household: currentHousehold,
           bounties: _latestBounties,
+          memberHouseholdIds: _memberHouseholdIds,
+          activeMemberIds: _activeMemberIds,
           bountyService: widget.bounties,
           memberAvatars: Map<String, String>.from(_memberAvatars),
           onRefresh: refresh,

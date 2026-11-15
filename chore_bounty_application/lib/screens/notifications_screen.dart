@@ -55,7 +55,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         candidate = candidate.copyWith(bountyCreatorId: match.creatorId);
       }
     }
-    return candidate.isVisibleTo(widget.user.id.toString(), widget.user.name);
+    return candidate.isVisibleTo(
+      widget.user.id.toString(),
+      widget.user.name,
+      widget.householdId,
+    );
   }
 
   @override
@@ -71,6 +75,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         readIds: widget.bounties.readNotificationIds,
         currentUserId: widget.user.id.toString(),
         currentUserName: widget.user.name,
+        activeHouseholdId: widget.householdId,
       );
     }
     _loadData(showSpinner: _notifications.isEmpty);
@@ -347,7 +352,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ),
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
                 children: [
-                  if (_notifications.isEmpty)
+                  if (visible.isEmpty)
                     _buildEmptyState()
                   else
                     for (final entry in grouped.entries) ...[

@@ -6,6 +6,7 @@ import '../models/leaderboard_entry.dart';
 import '../widgets/dashboard/dashboard_chore_list.dart';
 import '../widgets/dashboard/dashboard_filter_pills.dart';
 import '../widgets/dashboard/dashboard_header.dart';
+import '../widgets/dashboard/dashboard_metrics_strip.dart';
 import '../widgets/dashboard/dashboard_summary_card.dart';
 
 class DashboardView extends StatefulWidget {
@@ -21,6 +22,8 @@ class DashboardView extends StatefulWidget {
     required this.onSelectBounty,
     required this.onCreateBounty,
     this.myHouseholds = const [],
+    this.memberHouseholdIds,
+    this.activeMemberIds,
     this.onHouseholdSwitch,
     this.onHouseholdSelected,
     this.onAddHousehold,
@@ -37,6 +40,8 @@ class DashboardView extends StatefulWidget {
   final AppUser user;
   final Household? currentHousehold;
   final List<Household> myHouseholds;
+  final Set<String>? memberHouseholdIds;
+  final Set<String>? activeMemberIds;
   final List<Bounty> bounties;
   final List<LeaderboardEntry> leaderboard;
   final bool isLoading;
@@ -61,15 +66,47 @@ class DashboardView extends StatefulWidget {
 class _DashboardViewState extends State<DashboardView> {
   String _selectedFilter = 'All';
 
+  List<Bounty> get _visibleBounties => widget.bounties
+      .where(
+        (b) => b.isVisibleForHousehold(
+          currentUserId: widget.user.id.toString(),
+          memberHouseholdIds: widget.memberHouseholdIds,
+          activeMemberIds: widget.activeMemberIds,
+          activeHouseholdId: widget.currentHousehold?.id.toString(),
+        ),
+      )
+      .toList();
+
+  LeaderboardEntry? get _myLeaderboardEntry =>
+      widget.leaderboard.where((e) => e.userId == widget.user.id).firstOrNull;
+
   int get _userPoints {
-    final entry = widget.leaderboard.where((e) => e.userId == widget.user.id).firstOrNull;
+    final entry = _myLeaderboardEntry;
     if (entry != null) {
       return entry.totalTokens;
     }
-    // Calculate tokens from completed bounties by this user
-    return widget.bounties
+    return _visibleBounties
         .where((b) => b.isCompleted && b.assigneeId == widget.user.id.toString())
-        .fold<int>(0, (sum, b) => sum + (b.points > 0 ? b.points : (b.rewardValue?.toInt() ?? 0)));
+        .fold<int>(
+          0,
+          (sum, b) => sum + (b.points > 0 ? b.points : (b.rewardValue?.toInt() ?? 0)),
+        );
+  }
+
+  int? get _userRank {
+    final index = widget.leaderboard.indexWhere((e) => e.userId == widget.user.id);
+    if (index == -1) return null;
+    final entry = widget.leaderboard[index];
+    return entry.rank > 0 ? entry.rank : index + 1;
+  }
+
+  int get _myCompletedCount {
+    final entry = _myLeaderboardEntry;
+    if (entry != null && entry.completedCount > 0) {
+      return entry.completedCount;
+    }
+    final uid = widget.user.id.toString();
+    return _visibleBounties.where((b) => b.isCompleted && b.assigneeId == uid).length;
   }
 
   int get _notificationCount {
@@ -77,19 +114,14 @@ class _DashboardViewState extends State<DashboardView> {
       return widget.notificationCount!;
     }
     final uid = widget.user.id.toString();
-    return widget.bounties.where((b) => b.creatorId == uid && b.isSubmitted).length;
+    return _visibleBounties.where((b) => b.creatorId == uid && b.isSubmitted).length;
   }
 
   int get _tasksOngoing {
     final uid = widget.user.id.toString();
-    final userOngoing = widget.bounties.where((b) {
+    return _visibleBounties.where((b) {
       return b.assigneeId == uid && (b.isClaimed || b.isSubmitted);
     }).length;
-
-    if (userOngoing > 0) return userOngoing;
-
-    // Household ongoing tasks count
-    return widget.bounties.where((b) => b.isClaimed || b.isSubmitted).length;
   }
 
   bool _isPostedByMe(Bounty b) {
@@ -102,16 +134,39 @@ class _DashboardViewState extends State<DashboardView> {
   }
 
   List<Bounty> get _readyForApprovalChores =>
-      widget.bounties.where((b) => _isPostedByMe(b) && b.isSubmitted).toList();
+      _visibleBounties.where((b) => _isPostedByMe(b) && b.isSubmitted).toList();
 
   List<Bounty> get _availableChores =>
-      widget.bounties.where((b) => b.isAvailable).toList();
+      _visibleBounties.where((b) => b.isAvailable).toList();
 
   List<Bounty> get _myChores {
     final uid = widget.user.id.toString();
-    return widget.bounties.where((b) {
+    return _visibleBounties.where((b) {
       return b.assigneeId == uid && (b.isClaimed || b.isSubmitted);
     }).toList();
+  }
+
+  int get _completedChoresCount =>
+      _visibleBounties.where((b) => b.isCompleted).length;
+
+  int get _actionableChoresCount =>
+      _visibleBounties.where((b) => !b.isCancelled && !b.isExpired).length;
+
+  int get _openTokensPool => _availableChores.fold<int>(
+        0,
+        (sum, b) => sum + (b.points > 0 ? b.points : (b.rewardValue?.toInt() ?? 0)),
+      );
+
+  int get _inProgressCount =>
+      _visibleBounties.where((b) => b.isClaimed).length;
+
+  int get _dueSoonCount {
+    final cutoff = DateTime.now().add(const Duration(hours: 24));
+    return _visibleBounties.where((b) {
+      if (!b.isAvailable && !b.isClaimed) return false;
+      final due = b.dueAt;
+      return due != null && due.isBefore(cutoff);
+    }).length;
   }
 
   @override
@@ -127,7 +182,7 @@ class _DashboardViewState extends State<DashboardView> {
       backgroundColor: Colors.white,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 100),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
         children: [
           // 1. Header (Avatar, Hello, Name, Apartment Dropdown, Notification Icon)
           DashboardHeader(
@@ -140,7 +195,7 @@ class _DashboardViewState extends State<DashboardView> {
             onHouseholdTap: widget.onHouseholdSwitch ?? widget.onNotificationTap,
             onMenuTap: widget.onMenuTap,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
 
           // 2. Summary Banner Card (N Points, N Tasks Ongoing, Household Switcher)
           DashboardSummaryCard(
@@ -149,12 +204,38 @@ class _DashboardViewState extends State<DashboardView> {
             householdName: widget.currentHousehold?.name,
             currentHousehold: widget.currentHousehold,
             households: widget.myHouseholds,
+            rank: _userRank,
+            completedCount: _myCompletedCount,
+            memberCount:
+                widget.leaderboard.isNotEmpty ? widget.leaderboard.length : null,
             onHouseholdSelected: widget.onHouseholdSelected,
             onAddHousehold: widget.onAddHousehold,
             onTap: widget.onViewMyTasks,
             onHouseholdTap: widget.onHouseholdSwitch ?? widget.onNotificationTap,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
+
+          if (!widget.isLoading || _visibleBounties.isNotEmpty) ...[
+            DashboardMetricsStrip(
+              completedCount: _completedChoresCount,
+              totalChoresCount: _actionableChoresCount,
+              openCount: _availableChores.length,
+              openTokensPool: _openTokensPool,
+              myCompletedCount: _myCompletedCount,
+              inProgressCount: _inProgressCount,
+              reviewQueueCount: _readyForApprovalChores.length,
+              dueSoonCount: _dueSoonCount,
+              onProgressTap: widget.onViewChores,
+              onBoardTap: () {
+                setState(() {
+                  _selectedFilter =
+                      _readyForApprovalChores.isNotEmpty ? 'All' : 'Available';
+                });
+              },
+            ),
+            const SizedBox(height: 8),
+          ] else
+            const SizedBox(height: 4),
 
           // 3. Filter Pills (All, Available, My Chores)
           DashboardFilterPills(
@@ -163,7 +244,7 @@ class _DashboardViewState extends State<DashboardView> {
               setState(() => _selectedFilter = filter);
             },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 10),
 
           // 4. Content / Loading / Error
           if (widget.isLoading && widget.bounties.isEmpty)
@@ -197,7 +278,7 @@ class _DashboardViewState extends State<DashboardView> {
             ],
 
             // Spacing between sections when both are visible
-            if (showAvailable && showMyChores) const SizedBox(height: 22),
+            if (showAvailable && showMyChores) const SizedBox(height: 14),
 
             // My Chores Section
             if (showMyChores) ...[

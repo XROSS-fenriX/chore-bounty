@@ -163,14 +163,18 @@ class BountyService {
     await api.dio.delete('/bounties/$id');
   }
 
+  void clearSessionCache() {
+    _readNotificationIds.clear();
+  }
+
   Future<List<AppNotification>> notifications({
     String? householdId,
     String? currentUserId,
     String? currentUserName,
     List<Bounty> fallbackBounties = const [],
   }) async {
-    final serverList = <AppNotification>[];
     try {
+      final serverList = <AppNotification>[];
       final query = <String, dynamic>{};
       if (householdId != null && householdId.isNotEmpty) {
         query['household_id'] = householdId;
@@ -198,7 +202,11 @@ class BountyService {
               parsed = parsed.copyWith(bountyCreatorId: knownCreator);
             }
           }
-          if (!parsed.isVisibleTo(currentUserId, currentUserName)) {
+          if (!parsed.isVisibleTo(
+            currentUserId,
+            currentUserName,
+            householdId,
+          )) {
             continue;
           }
           if (parsed.isRead) {
@@ -211,12 +219,9 @@ class BountyService {
           );
         }
       }
+      return serverList;
     } catch (_) {
       // Fallback to derived notifications when offline or in unit tests.
-    }
-
-    if (serverList.isNotEmpty) {
-      return serverList;
     }
 
     return AppNotification.deriveFromBounties(
@@ -224,6 +229,7 @@ class BountyService {
       readIds: _readNotificationIds,
       currentUserId: currentUserId,
       currentUserName: currentUserName,
+      activeHouseholdId: householdId,
     );
   }
 
@@ -233,6 +239,11 @@ class BountyService {
       try {
         await api.dio.post('/notifications/$id/read');
         return true;
+      } on DioException catch (e) {
+        if (e.response != null) {
+          _readNotificationIds.remove(id);
+        }
+        return false;
       } catch (_) {
         return false;
       }

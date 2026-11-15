@@ -14,6 +14,9 @@ class DashboardSummaryCard extends StatelessWidget {
     this.currentHousehold,
     this.onHouseholdSelected,
     this.onAddHousehold,
+    this.rank,
+    this.completedCount,
+    this.memberCount,
   });
 
   final int points;
@@ -25,6 +28,9 @@ class DashboardSummaryCard extends StatelessWidget {
   final Household? currentHousehold;
   final ValueChanged<Household>? onHouseholdSelected;
   final VoidCallback? onAddHousehold;
+  final int? rank;
+  final int? completedCount;
+  final int? memberCount;
 
   static const Color _cardGreen = Color(0xFF1B8354);
   static const Color _borderColor = Color(0xFF13603D);
@@ -33,7 +39,7 @@ class DashboardSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minHeight: 92),
+      constraints: const BoxConstraints(minHeight: 76),
       decoration: BoxDecoration(
         color: _cardGreen,
         borderRadius: BorderRadius.circular(22),
@@ -59,130 +65,144 @@ class DashboardSummaryCard extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: 20,
-              vertical: 16,
+              vertical: 11,
             ),
-            child: Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // Points & Ongoing Tasks
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
+                Row(
+                  children: [
+                    // Points & Ongoing Tasks
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '$points',
-                            style: const TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                              letterSpacing: -0.6,
-                              height: 1.0,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Points',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white.withAlpha(230),
-                              letterSpacing: -0.2,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Container(
-                            width: 7,
-                            height: 7,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Color(0xFF86EFAC),
-                            ),
-                          ),
-                          const SizedBox(width: 7),
-                          Flexible(
-                            child: Text(
-                              tasksOngoing == 1
-                                  ? '1 task ongoing'
-                                  : '$tasksOngoing tasks ongoing',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white.withAlpha(220),
-                                letterSpacing: -0.2,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-
-                // Household Selector Pill / Dropdown
-                if (households.isNotEmpty)
-                  _buildHouseholdDropdown(context)
-                else
-                  Material(
-                    color: _pillGreen,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      side: BorderSide(
-                        color: Colors.white.withAlpha(45),
-                        width: 1.2,
-                      ),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: onHouseholdTap ?? onTap,
-                      borderRadius: BorderRadius.circular(20),
-                      splashColor: Colors.white.withAlpha(30),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 13,
-                          vertical: 8,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 112),
-                              child: Text(
-                                (householdName != null &&
-                                        householdName!.isNotEmpty)
-                                    ? householdName!
-                                    : 'Apartment',
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Text(
+                                '$points',
                                 style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w800,
                                   color: Colors.white,
+                                  letterSpacing: -0.6,
+                                  height: 1.0,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Points',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white.withAlpha(230),
                                   letterSpacing: -0.2,
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              Icons.keyboard_arrow_down_rounded,
-                              size: 18,
-                              color: Colors.white.withAlpha(230),
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Color(0xFF86EFAC),
+                                ),
+                              ),
+                              const SizedBox(width: 7),
+                              Flexible(
+                                child: Text(
+                                  tasksOngoing == 1
+                                      ? '1 task ongoing'
+                                      : '$tasksOngoing tasks ongoing',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white.withAlpha(220),
+                                    letterSpacing: -0.2,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (rank != null) ...[
+                                const SizedBox(width: 8),
+                                _FooterStatChip(
+                                  icon: Icons.emoji_events_rounded,
+                                  label: memberCount != null && memberCount! > 0
+                                      ? 'Rank #$rank of $memberCount'
+                                      : 'Rank #$rank',
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+
+                    // Household Selector Pill / Dropdown
+                    if (households.isNotEmpty)
+                      _buildHouseholdDropdown(context)
+                    else
+                      Material(
+                        color: _pillGreen,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          side: BorderSide(
+                            color: Colors.white.withAlpha(45),
+                            width: 1.2,
+                          ),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: onHouseholdTap ?? onTap,
+                          borderRadius: BorderRadius.circular(20),
+                          splashColor: Colors.white.withAlpha(30),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 13,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(maxWidth: 112),
+                                  child: Text(
+                                    (householdName != null &&
+                                            householdName!.isNotEmpty)
+                                        ? householdName!
+                                        : 'Apartment',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                      letterSpacing: -0.2,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 18,
+                                  color: Colors.white.withAlpha(230),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -340,6 +360,51 @@ class DashboardSummaryCard extends StatelessWidget {
             }
           },
         ),
+      ),
+    );
+  }
+}
+
+class _FooterStatChip extends StatelessWidget {
+  const _FooterStatChip({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(24),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Colors.white.withAlpha(32),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 13,
+            color: const Color(0xFFBBF7D0),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+              letterSpacing: -0.1,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -56,7 +56,23 @@ class AppNotification {
     return false;
   }
 
-  bool isVisibleTo(String? targetUserId, [String? targetUserName]) {
+  bool isVisibleTo(
+    String? targetUserId, [
+    String? targetUserName,
+    String? activeHouseholdId,
+  ]) {
+    if (userId.isNotEmpty &&
+        targetUserId != null &&
+        targetUserId.isNotEmpty &&
+        userId != targetUserId) {
+      return false;
+    }
+    if (activeHouseholdId != null &&
+        activeHouseholdId.isNotEmpty &&
+        householdId.isNotEmpty &&
+        householdId != activeHouseholdId) {
+      return false;
+    }
     if (isTriggeredBy(targetUserId, targetUserName)) {
       return false;
     }
@@ -157,11 +173,21 @@ class AppNotification {
     Set<String> readIds = const {},
     String? currentUserId,
     String? currentUserName,
+    String? activeHouseholdId,
   }) {
     final results = <AppNotification>[];
     final now = DateTime.now();
 
     for (final b in bounties) {
+      if (activeHouseholdId != null &&
+          activeHouseholdId.isNotEmpty &&
+          b.householdId.isNotEmpty &&
+          b.householdId != activeHouseholdId) {
+        continue;
+      }
+      if (!b.isVisibleForHousehold(currentUserId: currentUserId ?? '')) {
+        continue;
+      }
       final tokens = b.points > 0
           ? b.points
           : (b.rewardValue != null && b.rewardValue! > 0

@@ -20,11 +20,15 @@ class ChoresView extends StatefulWidget {
     required this.onSelectBounty,
     required this.onCreateBounty,
     this.onMenuTap,
+    this.memberHouseholdIds,
+    this.activeMemberIds,
   });
 
   final AppUser user;
   final Household? currentHousehold;
   final List<Bounty> bounties;
+  final Set<String>? memberHouseholdIds;
+  final Set<String>? activeMemberIds;
   final bool isLoading;
   final String? errorMessage;
   final Future<void> Function() onRefresh;
@@ -97,24 +101,36 @@ class _ChoresViewState extends State<ChoresView> {
     }
   }
 
+  List<Bounty> get _visibleBounties => widget.bounties
+      .where(
+        (b) => b.isVisibleForHousehold(
+          currentUserId: widget.user.id.toString(),
+          memberHouseholdIds: widget.memberHouseholdIds,
+          activeMemberIds: widget.activeMemberIds,
+          activeHouseholdId: widget.currentHousehold?.id.toString(),
+        ),
+      )
+      .toList();
+
   List<Bounty> get _readyForApprovalChores =>
-      widget.bounties.where((b) => _isPostedByMe(b) && b.isSubmitted).toList();
+      _visibleBounties.where((b) => _isPostedByMe(b) && b.isSubmitted).toList();
 
   List<Bounty> get _filteredBounties {
     final uid = widget.user.id.toString();
+    final visible = _visibleBounties;
     final baseList = switch (_selectedFilter) {
-      'In Progress' => widget.bounties
+      'In Progress' => visible
           .where((b) =>
               !_isPostedByMe(b) &&
               b.assigneeId == uid &&
               (b.isClaimed || b.isSubmitted))
           .toList(),
       'Completed' =>
-        widget.bounties.where((b) => !_isPostedByMe(b) && b.isCompleted).toList(),
-      'Posted by Me' => widget.bounties
+        visible.where((b) => !_isPostedByMe(b) && b.isCompleted).toList(),
+      'Posted by Me' => visible
           .where((b) => _isPostedByMe(b) && _matchesPostedStatus(b))
           .toList(),
-      _ => widget.bounties
+      _ => visible
           .where((b) => !_isPostedByMe(b) && b.isAvailable)
           .toList(),
     };

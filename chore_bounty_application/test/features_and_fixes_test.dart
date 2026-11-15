@@ -20,6 +20,7 @@ import 'package:chore_bounty_application/widgets/bounty_form/bounty_category_ico
 import 'package:chore_bounty_application/widgets/bounty_form/bounty_date_time_picker.dart';
 import 'package:chore_bounty_application/widgets/dashboard/dashboard_bounty_card.dart';
 import 'package:chore_bounty_application/widgets/dashboard/dashboard_filter_pills.dart';
+import 'package:chore_bounty_application/widgets/dashboard/dashboard_metrics_strip.dart';
 import 'package:chore_bounty_application/widgets/leaderboard/leaderboard_podium.dart';
 import 'package:chore_bounty_application/services/auth_service.dart';
 import 'package:chore_bounty_application/services/bounty_service.dart';
@@ -703,9 +704,16 @@ void main() {
         ),
       );
 
-      // 1. Open date picker -> pick today (OK) -> switch time picker to input and enter 00:00 (past)
+      // 1. Open date picker -> pick today explicitly -> switch time picker to input and enter 00:00 (past)
+      final today = DateUtils.dateOnly(DateTime.now());
       await tester.tap(find.text('Select date and time'));
       await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.edit_outlined));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byType(TextFormField).first,
+        '${today.month.toString().padLeft(2, '0')}/${today.day.toString().padLeft(2, '0')}/${today.year}',
+      );
       await tester.tap(find.text('OK'));
       await tester.pumpAndSettle();
 
@@ -778,8 +786,18 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       await tester.pumpAndSettle();
+      final todayForCreate = DateUtils.dateOnly(DateTime.now());
       await tester.tap(dueFinder);
       await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.edit_outlined));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(Dialog),
+          matching: find.byType(TextFormField),
+        ).first,
+        '${todayForCreate.month.toString().padLeft(2, '0')}/${todayForCreate.day.toString().padLeft(2, '0')}/${todayForCreate.year}',
+      );
       await tester.tap(find.text('OK'));
       await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.keyboard_outlined));
@@ -1639,6 +1657,374 @@ void main() {
         expect(find.text('Proof Submitted'), findsOneWidget);
         expect(find.byType(BountyProofGallery), findsOneWidget);
         expect(find.text('Counters spotless'), findsOneWidget);
+      },
+    );
+  });
+
+  group('Security, notifications, household departure & dashboard metrics', () {
+    test(
+      'BountyService.notifications returns empty list on 200 [] without deriving fallback',
+      () async {
+        final storage = _MemoryTokenStorage(initialToken: 'token');
+        final api = ApiClient(storage);
+        api.dio.httpClientAdapter = _StubHttpAdapter((options) async {
+          return ResponseBody.fromString(
+            jsonEncode({'data': []}),
+            200,
+            headers: {
+              Headers.contentTypeHeader: ['application/json'],
+            },
+          );
+        });
+
+        final service = BountyService(api);
+        const fallback = [
+          Bounty(
+            id: '99',
+            householdId: '10',
+            creatorId: '2',
+            creator: 'Leonard',
+            title: 'Fallback Chore',
+            status: 'open',
+            points: 20,
+          ),
+        ];
+
+        final result = await service.notifications(
+          householdId: '10',
+          currentUserId: '1',
+          currentUserName: 'Sheldon',
+          fallbackBounties: fallback,
+        );
+
+        expect(result, isEmpty);
+      },
+    );
+
+    test(
+      'AppNotification.isVisibleTo enforces userId and activeHouseholdId boundaries',
+      () {
+        final notif = AppNotification(
+          id: '10',
+          householdId: '5',
+          userId: '1',
+          actorId: '2',
+          actorName: 'Leonard',
+          eventType: 'posted',
+          eventName: 'Chore Posted',
+          description: 'New chore',
+          createdAt: DateTime(2026, 1, 1),
+        );
+
+        expect(notif.isVisibleTo('1', 'Sheldon', '5'), isTrue);
+        expect(notif.isVisibleTo('3', 'Penny', '5'), isFalse);
+        expect(notif.isVisibleTo('1', 'Sheldon', '6'), isFalse);
+      },
+    );
+
+    test(
+      'Bounty.isVisibleForHousehold hides open/taken/submitted departed chores and retains other-member completed chores',
+      () {
+        const departedHouseholdIds = <String>{};
+
+        const openDeparted = Bounty(
+          id: '1',
+          householdId: '10',
+          creatorId: '2',
+          title: 'Open Departed',
+          status: 'open',
+        );
+        const takenDeparted = Bounty(
+          id: '2',
+          householdId: '10',
+          creatorId: '2',
+          assigneeId: '3',
+          title: 'Taken Departed',
+          status: 'claimed',
+        );
+        const reviewDeparted = Bounty(
+          id: '3',
+          householdId: '10',
+          creatorId: '1',
+          assigneeId: '3',
+          title: 'Review Departed',
+          status: 'submitted',
+        );
+        const completedBySelf = Bounty(
+          id: '4',
+          householdId: '10',
+          creatorId: '2',
+          assigneeId: '1',
+          title: 'Completed By Me',
+          status: 'completed',
+        );
+        const completedByOther = Bounty(
+          id: '5',
+          householdId: '10',
+          creatorId: '2',
+          assigneeId: '3',
+          title: 'Completed By Penny',
+          status: 'completed',
+        );
+
+        expect(
+          openDeparted.isVisibleForHousehold(
+            currentUserId: '1',
+            memberHouseholdIds: departedHouseholdIds,
+          ),
+          isFalse,
+        );
+        expect(
+          takenDeparted.isVisibleForHousehold(
+            currentUserId: '1',
+            memberHouseholdIds: departedHouseholdIds,
+          ),
+          isFalse,
+        );
+        expect(
+          reviewDeparted.isVisibleForHousehold(
+            currentUserId: '1',
+            memberHouseholdIds: departedHouseholdIds,
+          ),
+          isFalse,
+        );
+        expect(
+          completedBySelf.isVisibleForHousehold(
+            currentUserId: '1',
+            memberHouseholdIds: departedHouseholdIds,
+          ),
+          isFalse,
+        );
+        expect(
+          completedByOther.isVisibleForHousehold(
+            currentUserId: '1',
+            memberHouseholdIds: departedHouseholdIds,
+          ),
+          isTrue,
+        );
+
+        // Rejoining restores non-completed visibility
+        expect(
+          openDeparted.isVisibleForHousehold(
+            currentUserId: '1',
+            memberHouseholdIds: const {'10'},
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    testWidgets(
+      'DashboardView renders enhanced household metrics and enforces departure chore filtering',
+      (tester) async {
+        const user = AppUser(id: 1, name: 'Sheldon Cooper', email: 's@test.com');
+        const currentHousehold = Household(
+          id: 10,
+          name: 'Apt 4A',
+          inviteCode: 'APT4A1',
+        );
+        const leaderboard = [
+          LeaderboardEntry(
+            userId: 1,
+            name: 'Sheldon Cooper',
+            totalTokens: 120,
+            completedCount: 3,
+            activeCount: 1,
+            totalRewardValue: 120.0,
+            tier: 'Gold',
+            rank: 1,
+          ),
+          LeaderboardEntry(
+            userId: 2,
+            name: 'Leonard Hofstadter',
+            totalTokens: 80,
+            completedCount: 2,
+            activeCount: 0,
+            totalRewardValue: 80.0,
+            tier: 'Silver',
+            rank: 2,
+          ),
+        ];
+
+        const bounties = [
+          Bounty(
+            id: '1',
+            householdId: '10',
+            creatorId: '2',
+            creator: 'Leonard',
+            title: 'Active Open Kitchen',
+            status: 'open',
+            points: 30,
+          ),
+          Bounty(
+            id: '2',
+            householdId: '10',
+            creatorId: '2',
+            creator: 'Leonard',
+            assigneeId: '1',
+            assignee: 'Sheldon Cooper',
+            title: 'Active Claimed Trash',
+            status: 'claimed',
+            points: 20,
+          ),
+          Bounty(
+            id: '3',
+            householdId: '10',
+            creatorId: '2',
+            creator: 'Leonard',
+            assigneeId: '1',
+            assignee: 'Sheldon Cooper',
+            title: 'Active Completed Sweep',
+            status: 'completed',
+            points: 50,
+          ),
+          Bounty(
+            id: '4',
+            householdId: '99',
+            creatorId: '4',
+            creator: 'Howard',
+            title: 'Departed Open Hidden',
+            status: 'open',
+            points: 40,
+            isViewerActiveMember: false,
+          ),
+          Bounty(
+            id: '5',
+            householdId: '99',
+            creatorId: '4',
+            creator: 'Howard',
+            assigneeId: '5',
+            assignee: 'Raj',
+            title: 'Departed Completed Retained',
+            status: 'completed',
+            points: 25,
+            isViewerActiveMember: false,
+          ),
+        ];
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: DashboardView(
+                user: user,
+                currentHousehold: currentHousehold,
+                myHouseholds: const [currentHousehold],
+                memberHouseholdIds: const {'10'},
+                bounties: bounties,
+                leaderboard: leaderboard,
+                isLoading: false,
+                onRefresh: () async {},
+                onSelectBounty: (_) {},
+                onCreateBounty: () {},
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.byType(DashboardMetricsStrip), findsOneWidget);
+        expect(find.text('Rank #1 of 2'), findsOneWidget);
+        expect(find.text('3 done'), findsOneWidget);
+        expect(find.text('50% done'), findsOneWidget);
+        expect(find.text('2 of 4 chores'), findsOneWidget);
+        expect(find.text('30 pts'), findsOneWidget);
+        expect(find.text('1 open · 1 active'), findsOneWidget);
+
+        expect(find.text('Active Open Kitchen'), findsOneWidget);
+        expect(find.text('Departed Open Hidden'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'ChoresView and ProfileView retain only other-member completed chores for departed households',
+      (tester) async {
+        const user = AppUser(id: 1, name: 'Sheldon Cooper', email: 's@test.com');
+        const departedBounties = [
+          Bounty(
+            id: '10',
+            householdId: '50',
+            creatorId: '2',
+            creator: 'Leonard',
+            title: 'Departed Open Dish',
+            status: 'open',
+            points: 15,
+            isViewerActiveMember: false,
+          ),
+          Bounty(
+            id: '11',
+            householdId: '50',
+            creatorId: '1',
+            creator: 'Sheldon Cooper',
+            assigneeId: '2',
+            assignee: 'Leonard',
+            title: 'Departed Review Dish',
+            status: 'submitted',
+            points: 20,
+            isViewerActiveMember: false,
+          ),
+          Bounty(
+            id: '12',
+            householdId: '50',
+            creatorId: '2',
+            creator: 'Leonard',
+            assigneeId: '3',
+            assignee: 'Penny',
+            title: 'Departed Completed Mop',
+            status: 'completed',
+            points: 35,
+            isViewerActiveMember: false,
+          ),
+        ];
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: ChoresView(
+                user: user,
+                bounties: departedBounties,
+                memberHouseholdIds: const {},
+                isLoading: false,
+                onRefresh: () async {},
+                onSelectBounty: (_) {},
+                onCreateBounty: () {},
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('Departed Open Dish'), findsNothing);
+        expect(find.text('Departed Review Dish'), findsNothing);
+
+        await tester.tap(find.text('Available'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Completed').last);
+        await tester.pumpAndSettle();
+        expect(find.text('Departed Completed Mop'), findsOneWidget);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: ProfileView(
+                currentUser: user,
+                myHouseholds: const [],
+                memberHouseholdIds: const {},
+                bounties: departedBounties,
+                onRefresh: () async {},
+                onEditProfile: () {},
+                onSelectBounty: (_) {},
+                onAddHousehold: () {},
+                onSwitchHousehold: (_) {},
+                onLeaveHousehold: (_) {},
+                onLogout: () {},
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('Departed Review Dish'), findsNothing);
+        expect(find.text('Departed Open Dish'), findsNothing);
       },
     );
   });

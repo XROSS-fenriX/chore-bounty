@@ -17,6 +17,8 @@ class ProfileView extends StatelessWidget {
     this.leaderboardEntry,
     this.member,
     this.bounties = const [],
+    this.memberHouseholdIds,
+    this.activeMemberIds,
     required this.onRefresh,
     this.onMenuTap,
     required this.onEditProfile,
@@ -36,6 +38,8 @@ class ProfileView extends StatelessWidget {
   final LeaderboardEntry? leaderboardEntry;
   final HouseholdMember? member;
   final List<Bounty> bounties;
+  final Set<String>? memberHouseholdIds;
+  final Set<String>? activeMemberIds;
   final Future<void> Function() onRefresh;
   final VoidCallback? onMenuTap;
   final VoidCallback onEditProfile;
@@ -45,10 +49,27 @@ class ProfileView extends StatelessWidget {
   final ValueChanged<Household> onLeaveHousehold;
   final VoidCallback onLogout;
 
+  List<Bounty> get _visibleBounties {
+    final householdIds = memberHouseholdIds ??
+        (myHouseholds.isNotEmpty
+            ? myHouseholds.map((h) => h.id.toString()).toSet()
+            : null);
+    return bounties
+        .where(
+          (b) => b.isVisibleForHousehold(
+            currentUserId: currentUser.id.toString(),
+            memberHouseholdIds: householdIds,
+            activeMemberIds: activeMemberIds,
+            activeHouseholdId: currentHousehold?.id.toString(),
+          ),
+        )
+        .toList();
+  }
+
   int get _effectivePoints {
     if (leaderboardEntry != null) return leaderboardEntry!.totalTokens;
     final uid = currentUser.id.toString();
-    return bounties
+    return _visibleBounties
         .where((b) => b.assigneeId == uid && b.isCompleted)
         .fold<int>(
           0,
@@ -62,7 +83,9 @@ class ProfileView extends StatelessWidget {
       return leaderboardEntry!.completedCount;
     }
     final uid = currentUser.id.toString();
-    return bounties.where((b) => b.assigneeId == uid && b.isCompleted).length;
+    return _visibleBounties
+        .where((b) => b.assigneeId == uid && b.isCompleted)
+        .length;
   }
 
   String? get _effectiveRole => member?.role ?? currentHousehold?.role;
@@ -151,7 +174,7 @@ class ProfileView extends StatelessWidget {
             userName: currentUser.name,
             currentUserId: currentUser.id.toString(),
             currentUserName: currentUser.name,
-            bounties: bounties,
+            bounties: _visibleBounties,
             onSelectBounty: onSelectBounty,
           ),
           const SizedBox(height: 24),
