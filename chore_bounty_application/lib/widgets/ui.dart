@@ -132,10 +132,18 @@ class PromptInputDialog extends StatefulWidget {
     this.labelText,
     this.hintText,
     this.confirmLabel = 'Save',
+    this.minLines,
     this.maxLines = 1,
     this.autofocus = false,
     this.textCapitalization = TextCapitalization.none,
     this.confirmOutlined = false,
+    this.icon,
+    this.accentColor,
+    this.accentBackgroundColor,
+    this.confirmBackgroundColor,
+    this.confirmForegroundColor,
+    this.confirmBorderColor,
+    this.showConfirmIcon = false,
   });
 
   final String title;
@@ -144,10 +152,18 @@ class PromptInputDialog extends StatefulWidget {
   final String? labelText;
   final String? hintText;
   final String confirmLabel;
+  final int? minLines;
   final int maxLines;
   final bool autofocus;
   final TextCapitalization textCapitalization;
   final bool confirmOutlined;
+  final IconData? icon;
+  final Color? accentColor;
+  final Color? accentBackgroundColor;
+  final Color? confirmBackgroundColor;
+  final Color? confirmForegroundColor;
+  final Color? confirmBorderColor;
+  final bool showConfirmIcon;
 
   @override
   State<PromptInputDialog> createState() => _PromptInputDialogState();
@@ -170,8 +186,56 @@ class _PromptInputDialogState extends State<PromptInputDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final accentColor = widget.accentColor ?? const Color(0xFF1B8354);
+    final accentBg = widget.accentBackgroundColor ?? const Color(0xFFECFDF5);
+    final confirmFg = widget.confirmForegroundColor ??
+        (widget.confirmOutlined ? accentColor : Colors.white);
+    final confirmBg = widget.confirmBackgroundColor ??
+        (widget.confirmOutlined ? accentBg : accentColor);
+    final confirmBorder = widget.confirmBorderColor ??
+        (widget.confirmOutlined
+            ? accentColor.withValues(alpha: 0.3)
+            : Colors.transparent);
+
     return AlertDialog(
-      title: Text(widget.title),
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, 14, 24, 20),
+      actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      title: Row(
+        children: [
+          if (widget.icon != null) ...[
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: accentBg,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(widget.icon, color: accentColor, size: 21),
+            ),
+            const SizedBox(width: 12),
+          ],
+          Expanded(
+            child: Text(
+              widget.title,
+              style: const TextStyle(
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF0F172A),
+                letterSpacing: -0.3,
+              ),
+            ),
+          ),
+        ],
+      ),
       content: SizedBox(
         width: double.maxFinite,
         child: Column(
@@ -179,38 +243,122 @@ class _PromptInputDialogState extends State<PromptInputDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (widget.subtitle != null) ...[
-              Text(widget.subtitle!),
-              const SizedBox(height: 12),
+              Text(
+                widget.subtitle!,
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  height: 1.45,
+                  color: Color(0xFF475569),
+                ),
+              ),
+              const SizedBox(height: 16),
             ],
             TextField(
               controller: _controller,
               autofocus: widget.autofocus,
+              minLines: widget.minLines,
               maxLines: widget.maxLines,
               textCapitalization: widget.textCapitalization,
+              style: const TextStyle(
+                fontSize: 14,
+                height: 1.45,
+                color: Color(0xFF0F172A),
+              ),
               decoration: InputDecoration(
                 labelText: widget.labelText,
+                labelStyle: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF64748B),
+                ),
                 hintText: widget.hintText,
-                border: const OutlineInputBorder(),
+                hintStyle: const TextStyle(
+                  fontSize: 13.5,
+                  color: Color(0xFF94A3B8),
+                ),
+                filled: true,
+                fillColor: const Color(0xFFF8FAFC),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 14,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: accentColor, width: 1.5),
+                ),
               ),
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF475569),
+                  backgroundColor: const Color(0xFFF8FAFC),
+                  side: const BorderSide(color: Color(0xFFE2E8F0)),
+                  elevation: 0,
+                  minimumSize: const Size(0, 46),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton(
+                onPressed: () => Navigator.pop(context, _controller.text),
+                style: FilledButton.styleFrom(
+                  backgroundColor: confirmBg,
+                  foregroundColor: confirmFg,
+                  elevation: 0,
+                  minimumSize: const Size(0, 46),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: confirmBorder),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (widget.showConfirmIcon && widget.icon != null) ...[
+                      Icon(widget.icon, size: 17),
+                      const SizedBox(width: 6),
+                    ],
+                    Flexible(
+                      child: Text(
+                        widget.confirmLabel,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-        if (widget.confirmOutlined)
-          OutlinedButton(
-            onPressed: () => Navigator.pop(context, _controller.text),
-            child: Text(widget.confirmLabel),
-          )
-        else
-          FilledButton(
-            onPressed: () => Navigator.pop(context, _controller.text),
-            child: Text(widget.confirmLabel),
-          ),
       ],
     );
   }

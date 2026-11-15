@@ -614,8 +614,16 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
             'Return this chore to in-progress so the roommate can resubmit completion proof.',
         hintText: 'Optional note for the roommate...',
         confirmLabel: 'Request Redo',
-        maxLines: 2,
+        minLines: 2,
+        maxLines: 3,
         confirmOutlined: true,
+        icon: Icons.replay_rounded,
+        accentColor: Color(0xFFB45309),
+        accentBackgroundColor: Color(0xFFFEF3C7),
+        confirmBackgroundColor: Color(0xFFFFFBEB),
+        confirmForegroundColor: Color(0xFFB45309),
+        confirmBorderColor: Color(0xFFFDE68A),
+        showConfirmIcon: true,
       ),
     );
 

@@ -2060,6 +2060,94 @@ void main() {
       },
     );
   });
+
+  group('Request Redo modal redesign', () {
+    testWidgets(
+      'displays system-aligned AlertDialog, icon badge, feedback input, Cancel and Request Redo CTA',
+      (tester) async {
+        final service = _FakeRejectBountyService();
+        final submittedBounty = Bounty(
+          id: '42',
+          creatorId: '1',
+          creator: 'Leonard',
+          assigneeId: '2',
+          assignee: 'Sheldon',
+          title: 'Empty trash cans',
+          status: 'submitted',
+          points: 15,
+          submittedAt: DateTime.now().subtract(const Duration(minutes: 5)),
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: BountyDetailScreen(
+              bounty: submittedBounty,
+              currentUser: const AppUser(
+                id: 1,
+                name: 'Leonard',
+                email: 'leonard@example.com',
+              ),
+              service: service,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Request Redo'));
+        await tester.pumpAndSettle();
+
+        final dialog = tester.widget<AlertDialog>(find.byType(AlertDialog));
+        expect(dialog.backgroundColor, Colors.white);
+        expect(dialog.surfaceTintColor, Colors.transparent);
+        expect(
+          dialog.shape,
+          isA<RoundedRectangleBorder>().having(
+            (s) => s.borderRadius,
+            'borderRadius',
+            BorderRadius.circular(24),
+          ),
+        );
+
+        expect(
+          find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.byIcon(Icons.replay_rounded),
+          ),
+          findsNWidgets(2),
+        );
+        expect(
+          find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.text('Optional note for the roommate...'),
+          ),
+          findsOneWidget,
+        );
+
+        // Cancel closes without invoking reject.
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(service.rejectCalls, 0);
+
+        // Re-open, enter feedback, and confirm Request Redo.
+        await tester.tap(find.text('Request Redo'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.byType(TextField),
+          ),
+          'Please tie the liner',
+        );
+        await tester.tap(find.text('Request Redo').last);
+        await tester.pumpAndSettle();
+
+        expect(service.rejectCalls, 1);
+        expect(service.lastRejectedId, '42');
+        expect(service.lastRejectFeedback, 'Please tie the liner');
+      },
+    );
+  });
 }
 
 class _MemoryTokenStorage extends TokenStorage {
@@ -2209,6 +2297,31 @@ class _FakeSubmitBountyService extends BountyService {
     submitCalls++;
     lastProof = proof;
     lastImagePaths = List<String>.from(imagePaths);
+  }
+}
+
+class _FakeRejectBountyService extends BountyService {
+  _FakeRejectBountyService() : super(ApiClient(_MemoryTokenStorage()));
+
+  int rejectCalls = 0;
+  String? lastRejectedId;
+  String? lastRejectFeedback;
+
+  @override
+  Future<Bounty> reject(String id, {String? feedback}) async {
+    rejectCalls++;
+    lastRejectedId = id;
+    lastRejectFeedback = feedback;
+    return Bounty(
+      id: id,
+      creatorId: '1',
+      creator: 'Leonard',
+      assigneeId: '2',
+      assignee: 'Sheldon',
+      title: 'Empty trash cans',
+      status: 'claimed',
+      points: 15,
+    );
   }
 }
 
