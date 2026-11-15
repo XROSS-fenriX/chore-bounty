@@ -6,7 +6,6 @@ import '../models/leaderboard_entry.dart';
 import '../widgets/dashboard/dashboard_chore_list.dart';
 import '../widgets/dashboard/dashboard_filter_pills.dart';
 import '../widgets/dashboard/dashboard_header.dart';
-import '../widgets/dashboard/dashboard_metrics_strip.dart';
 import '../widgets/dashboard/dashboard_summary_card.dart';
 
 class DashboardView extends StatefulWidget {
@@ -93,22 +92,6 @@ class _DashboardViewState extends State<DashboardView> {
         );
   }
 
-  int? get _userRank {
-    final index = widget.leaderboard.indexWhere((e) => e.userId == widget.user.id);
-    if (index == -1) return null;
-    final entry = widget.leaderboard[index];
-    return entry.rank > 0 ? entry.rank : index + 1;
-  }
-
-  int get _myCompletedCount {
-    final entry = _myLeaderboardEntry;
-    if (entry != null && entry.completedCount > 0) {
-      return entry.completedCount;
-    }
-    final uid = widget.user.id.toString();
-    return _visibleBounties.where((b) => b.isCompleted && b.assigneeId == uid).length;
-  }
-
   int get _notificationCount {
     if (widget.notificationCount != null) {
       return widget.notificationCount!;
@@ -146,29 +129,6 @@ class _DashboardViewState extends State<DashboardView> {
     }).toList();
   }
 
-  int get _completedChoresCount =>
-      _visibleBounties.where((b) => b.isCompleted).length;
-
-  int get _actionableChoresCount =>
-      _visibleBounties.where((b) => !b.isCancelled && !b.isExpired).length;
-
-  int get _openTokensPool => _availableChores.fold<int>(
-        0,
-        (sum, b) => sum + (b.points > 0 ? b.points : (b.rewardValue?.toInt() ?? 0)),
-      );
-
-  int get _inProgressCount =>
-      _visibleBounties.where((b) => b.isClaimed).length;
-
-  int get _dueSoonCount {
-    final cutoff = DateTime.now().add(const Duration(hours: 24));
-    return _visibleBounties.where((b) {
-      if (!b.isAvailable && !b.isClaimed) return false;
-      final due = b.dueAt;
-      return due != null && due.isBefore(cutoff);
-    }).length;
-  }
-
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1B8354);
@@ -182,7 +142,7 @@ class _DashboardViewState extends State<DashboardView> {
       backgroundColor: Colors.white,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 100),
         children: [
           // 1. Header (Avatar, Hello, Name, Apartment Dropdown, Notification Icon)
           DashboardHeader(
@@ -195,7 +155,7 @@ class _DashboardViewState extends State<DashboardView> {
             onHouseholdTap: widget.onHouseholdSwitch ?? widget.onNotificationTap,
             onMenuTap: widget.onMenuTap,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
 
           // 2. Summary Banner Card (N Points, N Tasks Ongoing, Household Switcher)
           DashboardSummaryCard(
@@ -204,38 +164,12 @@ class _DashboardViewState extends State<DashboardView> {
             householdName: widget.currentHousehold?.name,
             currentHousehold: widget.currentHousehold,
             households: widget.myHouseholds,
-            rank: _userRank,
-            completedCount: _myCompletedCount,
-            memberCount:
-                widget.leaderboard.isNotEmpty ? widget.leaderboard.length : null,
             onHouseholdSelected: widget.onHouseholdSelected,
             onAddHousehold: widget.onAddHousehold,
             onTap: widget.onViewMyTasks,
             onHouseholdTap: widget.onHouseholdSwitch ?? widget.onNotificationTap,
           ),
-          const SizedBox(height: 8),
-
-          if (!widget.isLoading || _visibleBounties.isNotEmpty) ...[
-            DashboardMetricsStrip(
-              completedCount: _completedChoresCount,
-              totalChoresCount: _actionableChoresCount,
-              openCount: _availableChores.length,
-              openTokensPool: _openTokensPool,
-              myCompletedCount: _myCompletedCount,
-              inProgressCount: _inProgressCount,
-              reviewQueueCount: _readyForApprovalChores.length,
-              dueSoonCount: _dueSoonCount,
-              onProgressTap: widget.onViewChores,
-              onBoardTap: () {
-                setState(() {
-                  _selectedFilter =
-                      _readyForApprovalChores.isNotEmpty ? 'All' : 'Available';
-                });
-              },
-            ),
-            const SizedBox(height: 8),
-          ] else
-            const SizedBox(height: 4),
+          const SizedBox(height: 16),
 
           // 3. Filter Pills (All, Available, My Chores)
           DashboardFilterPills(
@@ -244,7 +178,7 @@ class _DashboardViewState extends State<DashboardView> {
               setState(() => _selectedFilter = filter);
             },
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 20),
 
           // 4. Content / Loading / Error
           if (widget.isLoading && widget.bounties.isEmpty)
@@ -278,7 +212,7 @@ class _DashboardViewState extends State<DashboardView> {
             ],
 
             // Spacing between sections when both are visible
-            if (showAvailable && showMyChores) const SizedBox(height: 14),
+            if (showAvailable && showMyChores) const SizedBox(height: 22),
 
             // My Chores Section
             if (showMyChores) ...[

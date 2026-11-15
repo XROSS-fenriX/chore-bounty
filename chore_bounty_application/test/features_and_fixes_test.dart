@@ -20,7 +20,6 @@ import 'package:chore_bounty_application/widgets/bounty_form/bounty_category_ico
 import 'package:chore_bounty_application/widgets/bounty_form/bounty_date_time_picker.dart';
 import 'package:chore_bounty_application/widgets/dashboard/dashboard_bounty_card.dart';
 import 'package:chore_bounty_application/widgets/dashboard/dashboard_filter_pills.dart';
-import 'package:chore_bounty_application/widgets/dashboard/dashboard_metrics_strip.dart';
 import 'package:chore_bounty_application/widgets/leaderboard/leaderboard_podium.dart';
 import 'package:chore_bounty_application/services/auth_service.dart';
 import 'package:chore_bounty_application/services/bounty_service.dart';
@@ -1815,7 +1814,7 @@ void main() {
     );
 
     testWidgets(
-      'DashboardView renders enhanced household metrics and enforces departure chore filtering',
+      'DashboardView preserves previous styling and enforces departure chore filtering',
       (tester) async {
         const user = AppUser(id: 1, name: 'Sheldon Cooper', email: 's@test.com');
         const currentHousehold = Household(
@@ -1922,13 +1921,10 @@ void main() {
         );
         await tester.pump();
 
-        expect(find.byType(DashboardMetricsStrip), findsOneWidget);
-        expect(find.text('Rank #1 of 2'), findsOneWidget);
-        expect(find.text('3 done'), findsOneWidget);
-        expect(find.text('50% done'), findsOneWidget);
-        expect(find.text('2 of 4 chores'), findsOneWidget);
-        expect(find.text('30 pts'), findsOneWidget);
-        expect(find.text('1 open · 1 active'), findsOneWidget);
+        expect(find.text('120'), findsOneWidget);
+        expect(find.text('1 task ongoing'), findsOneWidget);
+        expect(find.text('Rank #1 of 2'), findsNothing);
+        expect(find.text('50% done'), findsNothing);
 
         expect(find.text('Active Open Kitchen'), findsOneWidget);
         expect(find.text('Departed Open Hidden'), findsNothing);
