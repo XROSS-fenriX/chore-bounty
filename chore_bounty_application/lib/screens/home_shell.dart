@@ -33,6 +33,7 @@ export 'profile_view.dart';
 import 'user_detail_screen.dart';
 export 'user_detail_screen.dart';
 import '../widgets/avatar/user_avatar_widget.dart';
+import '../widgets/dialogs/congratulations_dialog.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({
@@ -70,7 +71,11 @@ class _HomeShellState extends State<HomeShell> {
   List<HouseholdMember> _latestMembers = const [];
   List<AppNotification> _latestNotifications = const [];
   final Set<String> _seenNotificationIds = {};
+  final Set<String> _celebratedIds = {};
+  bool _isShowingCelebration = false;
   bool _hasCompletedInitialNotificationLoad = false;
+  String _leaderboardPeriod = 'all';
+  int? _lastCompletedCount;
   Timer? _realtimeTimer;
 
   static const Color primaryGreen = Color(0xFF1B8354);
@@ -274,6 +279,14 @@ class _HomeShellState extends State<HomeShell> {
     final hId = currentHousehold?.id.toString();
     try {
       final bounties = await widget.bounties.all(householdId: hId);
+      final completedCount = bounties.where((b) => b.isCompleted).length;
+      List<LeaderboardEntry>? updatedLeaderboard;
+      if (_lastCompletedCount != null && completedCount != _lastCompletedCount) {
+        updatedLeaderboard = await widget.bounties.getLeaderboard(
+          householdId: hId,
+          period: _leaderboardPeriod,
+        );
+      }
       final notifications = await widget.bounties.notifications(
         householdId: hId,
         fallbackBounties: bounties,
@@ -281,10 +294,15 @@ class _HomeShellState extends State<HomeShell> {
         currentUserName: currentUser.name,
       );
       if (!mounted) return;
+      _lastCompletedCount = completedCount;
       _processNotifications(notifications);
       setState(() {
         _latestBounties = bounties;
         future = Future.value(bounties);
+        if (updatedLeaderboard != null) {
+          _syncMemberAvatars(bounties, updatedLeaderboard);
+          leaderboardFuture = Future.value(updatedLeaderboard);
+        }
       });
     } catch (_) {}
   }
@@ -299,10 +317,24 @@ class _HomeShellState extends State<HomeShell> {
         .where((n) => !n.isTriggeredBy(uid, uname))
         .toList();
 
+    final approvalsToCelebrate = <AppNotification>[];
+    for (final n in filtered) {
+      if (n.eventType == 'approved' &&
+          n.isNumericId &&
+          !n.isRead &&
+          !_celebratedIds.contains(n.id)) {
+        approvalsToCelebrate.add(n);
+      }
+    }
+
     AppNotification? newestUnseen;
     if (_hasCompletedInitialNotificationLoad && notifyNew) {
       for (final n in filtered) {
-        if (!_seenNotificationIds.contains(n.id) && !n.isRead) {
+        final isCelebratedApproval =
+            approvalsToCelebrate.any((a) => a.id == n.id);
+        if (!isCelebratedApproval &&
+            !_seenNotificationIds.contains(n.id) &&
+            !n.isRead) {
           newestUnseen ??= n;
         }
       }
@@ -312,6 +344,10 @@ class _HomeShellState extends State<HomeShell> {
     }
     _hasCompletedInitialNotificationLoad = true;
     _latestNotifications = filtered;
+
+    if (approvalsToCelebrate.isNotEmpty && mounted && !_isShowingCelebration) {
+      _showApprovalsDialog(approvalsToCelebrate);
+    }
 
     if (newestUnseen != null && mounted && !_isTestEnvironment) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -350,12 +386,58 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
+  void _showApprovalsDialog(List<AppNotification> approvals) {
+    _isShowingCelebration = true;
+    for (final n in approvals) {
+      _celebratedIds.add(n.id);
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        _isShowingCelebration = false;
+        return;
+      }
+
+      var openLeaderboard = false;
+      try {
+        await CongratulationsDialog.show(
+          context,
+          approvals,
+          onViewLeaderboard: () {
+            openLeaderboard = true;
+          },
+        );
+      } finally {
+        _isShowingCelebration = false;
+      }
+
+      final celebratedSet = approvals.map((n) => n.id).toSet();
+      if (mounted) {
+        setState(() {
+          _latestNotifications = _latestNotifications
+              .map((n) => celebratedSet.contains(n.id) ? n.copyWith(isRead: true) : n)
+              .toList();
+          if (openLeaderboard) {
+            tab = 2;
+          }
+        });
+      }
+
+      for (final n in approvals) {
+        await widget.bounties.markNotificationRead(n.id);
+      }
+    });
+  }
+
   Future<void> refresh({bool showError = false}) async {
     final hId = currentHousehold?.id.toString();
     final householdIntId = currentHousehold?.id;
     setState(() {
       future = widget.bounties.all(householdId: hId);
-      leaderboardFuture = widget.bounties.getLeaderboard(householdId: hId);
+      leaderboardFuture = widget.bounties.getLeaderboard(
+        householdId: hId,
+        period: _leaderboardPeriod,
+      );
       membersFuture = householdIntId != null
           ? widget.households.members(householdIntId)
           : Future.value(const <HouseholdMember>[]);
@@ -372,6 +454,7 @@ class _HomeShellState extends State<HomeShell> {
         currentUserName: currentUser.name,
       );
       if (mounted) {
+        _lastCompletedCount = bounties.where((b) => b.isCompleted).length;
         setState(() {
           _syncMemberAvatars(bounties, lb, members: members);
           _processNotifications(notifications);
@@ -1209,6 +1292,17 @@ class _HomeShellState extends State<HomeShell> {
           leaderboard: entries,
           isLoading: isLoading,
           errorMessage: errorMessage,
+          period: _leaderboardPeriod,
+          onPeriodChanged: (nextPeriod) {
+            if (_leaderboardPeriod == nextPeriod) return;
+            setState(() {
+              _leaderboardPeriod = nextPeriod;
+              leaderboardFuture = widget.bounties.getLeaderboard(
+                householdId: currentHousehold?.id.toString(),
+                period: _leaderboardPeriod,
+              );
+            });
+          },
           onRefresh: () => refresh(showError: true),
           onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
           onUserTap: (entry) => openUserDetail(

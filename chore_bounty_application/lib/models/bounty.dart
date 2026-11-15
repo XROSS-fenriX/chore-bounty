@@ -54,11 +54,17 @@ class Bounty {
   bool get isOpen => status == 'open' || status == 'available';
   bool get isPastDue =>
       isOpen && dueAt != null && !dueAt!.isAfter(DateTime.now());
+  bool get isExpired => isPastDue;
   bool get isAvailable => isOpen && !isPastDue;
   bool get isClaimed => status == 'claimed' || status == 'in_progress';
+  bool get isTaken => isClaimed;
   bool get isSubmitted => status == 'submitted';
   bool get isCompleted => status == 'completed';
   bool get isCancelled => status == 'cancelled' || status == 'canceled';
+
+  bool get canEdit => isAvailable || isTaken;
+  bool get canCancel => isAvailable || isTaken;
+  bool get canDelete => isAvailable || isCancelled || isExpired;
 
   static String inferCategory(String? category, String title, String description) {
     final cat = (category ?? '').trim();
@@ -108,6 +114,12 @@ class Bounty {
       return 'Maintenance';
     }
     return 'Other';
+  }
+
+  static DateTime? _parseLocalDate(dynamic raw) {
+    if (raw == null) return null;
+    final parsed = DateTime.tryParse(raw.toString());
+    return parsed?.toLocal();
   }
 
   static String _parseUserName(dynamic userObj, String? fallback) {
@@ -214,11 +226,11 @@ class Bounty {
       reward: (j['reward_description'] ?? j['reward'] ?? '').toString(),
       status: (j['status'] ?? 'open').toString(),
       submissionProof: j['submission_proof']?.toString(),
-      claimedAt: j['claimed_at'] != null ? DateTime.tryParse(j['claimed_at'].toString()) : null,
-      submittedAt: j['submitted_at'] != null ? DateTime.tryParse(j['submitted_at'].toString()) : null,
-      completedAt: j['completed_at'] != null ? DateTime.tryParse(j['completed_at'].toString()) : null,
-      dueAt: j['due_at'] != null ? DateTime.tryParse(j['due_at'].toString()) : null,
-      createdAt: j['created_at'] != null ? DateTime.tryParse(j['created_at'].toString()) : null,
+      claimedAt: _parseLocalDate(j['claimed_at']),
+      submittedAt: _parseLocalDate(j['submitted_at']),
+      completedAt: _parseLocalDate(j['completed_at']),
+      dueAt: _parseLocalDate(j['due_at']),
+      createdAt: _parseLocalDate(j['created_at']),
     );
   }
 }

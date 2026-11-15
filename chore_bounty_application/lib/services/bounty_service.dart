@@ -147,13 +147,17 @@ class BountyService {
     );
   }
 
-  Future<void> markNotificationRead(String id) async {
+  Future<bool> markNotificationRead(String id) async {
     _readNotificationIds.add(id);
     if (int.tryParse(id) != null) {
       try {
         await api.dio.post('/notifications/$id/read');
-      } catch (_) {}
+        return true;
+      } catch (_) {
+        return false;
+      }
     }
+    return true;
   }
 
   Future<void> markAllNotificationsRead({

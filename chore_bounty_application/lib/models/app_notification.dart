@@ -7,6 +7,8 @@ class AppNotification {
     required this.description,
     this.householdId = '',
     this.bountyId,
+    this.bountyTitle,
+    this.tokens,
     this.userId = '',
     this.actorId,
     this.actorName,
@@ -20,6 +22,8 @@ class AppNotification {
   final String id;
   final String householdId;
   final String? bountyId;
+  final String? bountyTitle;
+  final int? tokens;
   final String userId;
   final String? actorId;
   final String? actorName;
@@ -30,6 +34,8 @@ class AppNotification {
   final bool isRead;
   final DateTime? readAt;
   final DateTime createdAt;
+
+  bool get isNumericId => int.tryParse(id) != null;
 
   bool isTriggeredBy(String? targetUserId, [String? targetUserName]) {
     if (actorId != null &&
@@ -56,6 +62,8 @@ class AppNotification {
       id: id,
       householdId: householdId,
       bountyId: bountyId,
+      bountyTitle: bountyTitle,
+      tokens: tokens,
       userId: userId,
       actorId: actorId,
       actorName: actorName,
@@ -72,12 +80,12 @@ class AppNotification {
   factory AppNotification.fromJson(Map<String, dynamic> j) {
     final rawCreatedAt = j['created_at']?.toString();
     final parsedCreatedAt = rawCreatedAt != null
-        ? (DateTime.tryParse(rawCreatedAt) ?? DateTime.now())
+        ? (DateTime.tryParse(rawCreatedAt)?.toLocal() ?? DateTime.now())
         : DateTime.now();
 
     final rawReadAt = j['read_at']?.toString();
     final parsedReadAt =
-        rawReadAt != null ? DateTime.tryParse(rawReadAt) : null;
+        rawReadAt != null ? DateTime.tryParse(rawReadAt)?.toLocal() : null;
 
     final rawIsRead = j['is_read'];
     final isReadBool = rawIsRead == true ||
@@ -88,10 +96,21 @@ class AppNotification {
     final title = (j['event_name'] ?? j['title'] ?? 'Chore Update').toString();
     final desc = (j['description'] ?? j['message'] ?? '').toString();
 
+    final bountyMap = j['bounty'] is Map ? j['bounty'] as Map : null;
+    final rawBountyTitle =
+        (bountyMap?['title'] ?? j['bounty_title'])?.toString().trim();
+    final rawTokens = bountyMap?['tokens'] ?? j['tokens'];
+    final parsedTokens = rawTokens is num
+        ? rawTokens.toInt()
+        : (rawTokens != null ? int.tryParse(rawTokens.toString()) : null);
+
     return AppNotification(
       id: (j['id'] ?? '').toString(),
       householdId: (j['household_id'] ?? '').toString(),
-      bountyId: j['bounty_id']?.toString(),
+      bountyId: (bountyMap?['id'] ?? j['bounty_id'])?.toString(),
+      bountyTitle:
+          (rawBountyTitle != null && rawBountyTitle.isNotEmpty) ? rawBountyTitle : null,
+      tokens: parsedTokens,
       userId: (j['user_id'] ?? '').toString(),
       actorId: j['actor_id']?.toString(),
       actorName: j['actor_name']?.toString(),

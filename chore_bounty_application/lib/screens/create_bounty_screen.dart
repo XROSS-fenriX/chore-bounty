@@ -102,7 +102,7 @@ class _CreateBountyState extends State<CreateBounty> {
       };
 
       if (_dueDate != null) {
-        payload['due_at'] = _dueDate!.toIso8601String();
+        payload['due_at'] = _dueDate!.toUtc().toIso8601String();
       } else if (widget.isEditing) {
         payload['due_at'] = null;
       }

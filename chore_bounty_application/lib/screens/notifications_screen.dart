@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../models/app_notification.dart';
@@ -128,6 +129,44 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  Future<void> _handleTapNotification(AppNotification item) async {
+    await _handleMarkAsRead(item);
+    final bountyId = item.bountyId?.trim();
+    if (bountyId == null || bountyId.isEmpty) return;
+
+    try {
+      final bounty = await widget.bounties.show(bountyId);
+      if (!mounted) return;
+      widget.onSelectBounty(bounty);
+    } on DioException catch (e) {
+      if (!mounted) return;
+      if (e.response?.statusCode == 404) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This chore was deleted.')),
+        );
+        return;
+      }
+      final fallback = _bounties.where((b) => b.id == bountyId).firstOrNull;
+      if (fallback != null) {
+        widget.onSelectBounty(fallback);
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.bounties.error(e))),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final fallback = _bounties.where((b) => b.id == bountyId).firstOrNull;
+      if (fallback != null) {
+        widget.onSelectBounty(fallback);
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.bounties.error(e))),
+      );
+    }
+  }
+
   Future<void> _handleMarkAllRead() async {
     final visible = _notifications.where(_isFromOtherUser).toList();
     if (visible.isEmpty) return;
@@ -188,8 +227,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     switch (eventType) {
       case 'cancelled':
         return const Color(0xFFFEF2F2);
+      case 'approved':
       case 'awarded':
         return const Color(0xFFDCFCE7);
+      case 'redo':
+        return const Color(0xFFFFF7ED);
       case 'submitted':
         return const Color(0xFFFEF3C7);
     }
@@ -369,7 +411,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
-          onTap: () => _handleMarkAsRead(item),
+          onTap: () => _handleTapNotification(item),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(

@@ -326,15 +326,16 @@ void main() {
     expect(find.text('50 Tokens'), findsOneWidget);
     expect(find.byType(CategoryIconWidget), findsOneWidget);
 
-    // Verify description box
-    expect(find.text('Description'), findsOneWidget);
+    // Verify description text and detail columns in unified BountyInfoCard
     expect(find.text('Wash sheets and clothes in warm water.'), findsOneWidget);
+    expect(find.text('DUE'), findsOneWidget);
+    expect(find.text('CATEGORY'), findsOneWidget);
 
     // Verify bottom action button: 'Claim This Chore'
     expect(find.text('Claim This Chore'), findsOneWidget);
   });
 
-  testWidgets('BountyDetailScreen renders schedule due date with calendar icon and category with tag icon',
+  testWidgets('BountyDetailScreen renders schedule due date with schedule icon and category with tag icon',
       (WidgetTester tester) async {
     final now = DateTime.now();
     final todayEightPm = DateTime(now.year, now.month, now.day, 20, 0);
@@ -379,25 +380,18 @@ void main() {
     // Verify Submission Note / Proof is rendered for claimed assignee
     expect(find.text('Submission Note / Proof'), findsOneWidget);
     expect(find.text('Submit for Review'), findsOneWidget);
-    final descriptionHeader = tester.widget<Text>(find.text('Description'));
     final descBodyText = tester.widget<Text>(find.text('Wipe all counters and wash dishes.'));
 
-    // Scroll to reveal the schedule details card in the yellow box position
-    await tester.drag(find.byType(ListView), const Offset(0, -300));
-    await tester.pumpAndSettle();
-
-    // Verify Details card header, calendar icon and schedule text 'Due today, 8:00 PM'
-    expect(find.text('Details'), findsOneWidget);
-    final detailsHeader = tester.widget<Text>(find.text('Details'));
-    expect(detailsHeader.style?.fontSize, descriptionHeader.style?.fontSize);
-
-    expect(find.byIcon(Icons.calendar_today_outlined), findsOneWidget);
-    expect(find.text('Due today, 8:00 PM'), findsOneWidget);
-    final dueText = tester.widget<Text>(find.text('Due today, 8:00 PM'));
+    // Verify DUE and CATEGORY metadata inside BountyInfoCard
+    expect(find.text('DUE'), findsOneWidget);
+    expect(find.byIcon(Icons.schedule_rounded), findsOneWidget);
+    expect(find.text('Today, 8:00 PM'), findsOneWidget);
+    final dueText = tester.widget<Text>(find.text('Today, 8:00 PM'));
     expect(dueText.style?.fontSize, descBodyText.style?.fontSize);
 
     // Verify tag icon and category 'Cleaning'
-    expect(find.byIcon(Icons.local_offer_outlined), findsOneWidget);
+    expect(find.text('CATEGORY'), findsOneWidget);
+    expect(find.byIcon(Icons.tag_rounded), findsOneWidget);
     expect(find.text('Cleaning'), findsOneWidget);
     final categoryText = tester.widget<Text>(find.text('Cleaning'));
     expect(categoryText.style?.fontSize, descBodyText.style?.fontSize);
@@ -503,14 +497,12 @@ void main() {
     expect(find.text('Sheldon Cooper'), findsOneWidget);
     expect(find.text('you'), findsNothing);
 
-    // Verify Edit, Cancel, and Delete buttons are present in a single row
+    // Verify Edit and Delete buttons are present in a single row for Available chore (no Cancel)
     expect(find.text('Edit'), findsOneWidget);
-    expect(find.text('Cancel'), findsOneWidget);
+    expect(find.text('Cancel'), findsNothing);
     expect(find.text('Delete'), findsOneWidget);
     final editTopY = tester.getTopLeft(find.text('Edit')).dy;
-    final cancelTopY = tester.getTopLeft(find.text('Cancel')).dy;
     final deleteTopY = tester.getTopLeft(find.text('Delete')).dy;
-    expect(cancelTopY, editTopY);
     expect(deleteTopY, editTopY);
 
     // Tap 'Edit' and verify navigation to populated CreateBounty form
@@ -1375,7 +1367,7 @@ void main() {
     expect(find.text('Past Due'), findsNWidgets(2));
     expect(find.text('Claim This Chore'), findsNothing);
 
-    // 4. BountyDetailScreen for creator shows Past Due badge & banner and blocks Edit/Delete when past due
+    // 4. BountyDetailScreen for creator shows Past Due badge and allows Delete only when expired
     final creatorService = _FakeShowBountyService(myPastDueBounty);
     await tester.pumpWidget(
       MaterialApp(
@@ -1390,11 +1382,12 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Past Due'), findsNWidgets(2));
+    expect(find.text('Past Due'), findsOneWidget);
     expect(find.text('Edit'), findsNothing);
-    expect(find.text('Delete'), findsNothing);
+    expect(find.text('Cancel'), findsNothing);
+    expect(find.text('Delete'), findsOneWidget);
 
-    // 5. BountyDetailScreen for creator on a Taken (claimed) chore allows Edit, Cancel, and Delete
+    // 5. BountyDetailScreen for creator on a Taken (claimed) chore allows Edit and Cancel (no Delete)
     final myTakenBounty = Bounty(
       id: '12b',
       householdId: '2',
@@ -1425,14 +1418,11 @@ void main() {
     expect(find.text('Taken'), findsOneWidget);
     expect(find.text('Edit'), findsOneWidget);
     expect(find.text('Cancel'), findsOneWidget);
-    expect(find.text('Delete'), findsOneWidget);
+    expect(find.text('Delete'), findsNothing);
 
-    await tester.tap(find.text('Delete'));
+    await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
-    expect(find.text('Delete Chore'), findsOneWidget);
-    await tester.tap(find.text('Delete').last);
-    await tester.pumpAndSettle();
-    expect(takenCreatorService.deletedIds, ['12b']);
+    expect(find.text('Cancel Chore'), findsNWidgets(2));
   });
 
   testWidgets('DashboardBountyCard reflects Taken, Past Due, Cancelled, and Completed in status chip',
@@ -1907,27 +1897,32 @@ void main() {
     await tester.tap(find.text('Leaderboard'));
     await tester.pumpAndSettle();
 
-    // 1. Header matches PageMenuHeader style (no badges, no period pills)
+    // 1. Minimalist Leaderboard header, period control, summary card, no badges/crowns
     expect(find.byType(PageMenuHeader), findsWidgets);
     expect(find.text('Leaderboard'), findsWidgets);
+    expect(find.text('Apartment 4A · 4 members'), findsOneWidget);
+    expect(find.text('Week'), findsOneWidget);
+    expect(find.text('Month'), findsOneWidget);
+    expect(find.text('All time'), findsOneWidget);
     expect(find.text('My Badges'), findsNothing);
     expect(find.text('First Clean'), findsNothing);
-    expect(find.text('This Week'), findsNothing);
-    expect(find.text('This Month'), findsNothing);
+    expect(find.text('370'), findsOneWidget);
+    expect(find.text('You are 2nd · 80 tokens behind Sheldon'), findsOneWidget);
 
-    // 2. Ranked list cards show ordinal ranks 1st, 2nd, 3rd, 4th
-    expect(find.text('1st'), findsOneWidget);
-    expect(find.text('2nd'), findsOneWidget);
-    expect(find.text('3rd'), findsOneWidget);
-    expect(find.text('4th'), findsOneWidget);
-    expect(find.text('Leonard Hofstadter (You)'), findsOneWidget);
+    // 2. Flat ranking list shows numeric ranks and dash for 0 tokens
+    expect(find.text('1'), findsWidgets);
+    expect(find.text('2'), findsWidgets);
+    expect(find.text('3'), findsWidgets);
+    expect(find.text('–'), findsOneWidget);
+    expect(find.text('You'), findsOneWidget);
+    expect(find.text('Leonard Hofstadter'), findsOneWidget);
 
-    // 3. Podium first-place card is higher up/taller than 2nd, and 2nd above 3rd baseline check via top Y
-    final sheldonPodiumY = tester.getTopLeft(find.text('Sheldon')).dy;
-    final leonardPodiumY = tester.getTopLeft(find.text('Leonard')).dy;
-    final howardPodiumY = tester.getTopLeft(find.text('Howard')).dy;
-    expect(sheldonPodiumY, lessThan(leonardPodiumY));
-    expect(leonardPodiumY, lessThan(howardPodiumY));
+    // 3. Sorted top-to-bottom vertically (no podium)
+    final sheldonY = tester.getTopLeft(find.text('Sheldon Cooper')).dy;
+    final leonardY = tester.getTopLeft(find.text('Leonard Hofstadter')).dy;
+    final howardY = tester.getTopLeft(find.text('Howard Wolowitz')).dy;
+    expect(sheldonY, lessThan(leonardY));
+    expect(leonardY, lessThan(howardY));
 
     // 4. Tap Sheldon Cooper in the list to open dedicated UserDetailScreen
     await tester.tap(find.text('Sheldon Cooper'));
@@ -2062,8 +2057,8 @@ void main() {
     await tester.tap(find.text('Leaderboard'));
     await tester.pumpAndSettle();
 
-    // Tap own row ("Leonard Hofstadter (You)") -> should redirect to ProfileView instead of UserDetailScreen
-    await tester.tap(find.text('Leonard Hofstadter (You)'));
+    // Tap own row ("Leonard Hofstadter") -> should redirect to ProfileView instead of UserDetailScreen
+    await tester.tap(find.text('Leonard Hofstadter'));
     await tester.pumpAndSettle();
 
     expect(find.byType(UserDetailScreen), findsNothing);
@@ -2329,7 +2324,7 @@ void main() {
       of: find.byType(BountyDetailScreen),
       matching: find.byType(UserAvatarWidget),
     );
-    expect(bountyAvatars, findsOneWidget);
+    expect(bountyAvatars, findsNWidgets(2));
     await tester.tap(bountyAvatars.first);
     await tester.pumpAndSettle();
 
@@ -2434,18 +2429,11 @@ void main() {
     );
     expect(find.text('My Households'), findsNothing);
 
-    // Tap notification card -> marks it as read
+    // Tap notification card -> marks it as read and opens BountyDetailScreen
     final unreadDotFinder =
         find.byKey(const ValueKey('unread_dot_bounty_99_submitted'));
     expect(unreadDotFinder, findsOneWidget);
     await tester.tap(find.text('Chore Submitted'));
-    await tester.pumpAndSettle();
-    expect(unreadDotFinder, findsNothing);
-
-    // Go back to Dashboard and open the Ready for Approval chore
-    await tester.tap(find.byTooltip('Back'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Mop kitchen floor'));
     await tester.pumpAndSettle();
 
     expect(find.byType(BountyDetailScreen), findsOneWidget);
@@ -3012,6 +3000,15 @@ class _FakeHomeBountyService extends BountyService {
     String? householdId,
     int perPage = 100,
   }) async => bountiesList;
+
+  @override
+  Future<Bounty> show(String id) async => bountiesList.firstWhere(
+        (b) => b.id == id,
+        orElse: () => bountiesList.first,
+      );
+
+  @override
+  Future<bool> markNotificationRead(String id) async => true;
 
   @override
   Future<List<LeaderboardEntry>> getLeaderboard({
