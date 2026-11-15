@@ -1534,7 +1534,56 @@ void main() {
     });
 
     testWidgets(
-      'BountyDetailScreen requires camera/gallery photo before submit and uploads captured photos',
+      'BountyDetailScreen allows submit without photos',
+      (tester) async {
+        const assignee = AppUser(
+          id: 2,
+          name: 'Amy Farrah Fowler',
+          email: 'amy@example.com',
+        );
+        const claimed = Bounty(
+          id: '41',
+          householdId: '2',
+          creatorId: '1',
+          creator: 'Sheldon Cooper',
+          assigneeId: '2',
+          assignee: 'Amy Farrah Fowler',
+          title: 'Take out recycling',
+          status: 'claimed',
+          points: 20,
+        );
+
+        final fakeService = _FakeSubmitBountyService();
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: BountyDetailScreen(
+              bounty: claimed,
+              currentUser: assignee,
+              service: fakeService,
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('Open Camera'), findsOneWidget);
+        expect(find.text('0 / 3 Photos'), findsOneWidget);
+
+        await tester.enterText(
+          find.byType(TextField),
+          'Bins emptied and relined',
+        );
+        await tester.tap(find.text('Submit for Review'));
+        await tester.pumpAndSettle();
+
+        expect(fakeService.submitCalls, 1);
+        expect(fakeService.lastProof, 'Bins emptied and relined');
+        expect(fakeService.lastImagePaths, isEmpty);
+      },
+    );
+
+    testWidgets(
+      'BountyDetailScreen optionally attaches and uploads camera/gallery photos',
       (tester) async {
         final tempDir = Directory.systemTemp.createTempSync('proof_test_');
         addTearDown(() => tempDir.deleteSync(recursive: true));
@@ -1578,19 +1627,6 @@ void main() {
           ),
         );
         await tester.pump();
-
-        expect(find.text('Open Camera'), findsOneWidget);
-        expect(find.text('0 / 3 Photos'), findsOneWidget);
-
-        // Submitting without a photo shows validation error and skips API call
-        await tester.tap(find.text('Submit for Review'));
-        await tester.pump();
-
-        expect(
-          find.text('Please take at least one photo as proof before submitting.'),
-          findsOneWidget,
-        );
-        expect(fakeService.submitCalls, 0);
 
         // Capturing photo via Open Camera attaches preview
         await tester.tap(find.text('Open Camera'));

@@ -123,7 +123,7 @@ class BountyProofInputCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Take at least one photo showing the completed chore.',
+            'Optionally attach up to 3 photos or add a note showing the completed chore.',
             style: TextStyle(
               fontSize: 12.5,
               color: Color(0xFF64748B),

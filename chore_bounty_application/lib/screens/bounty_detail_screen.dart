@@ -416,14 +416,6 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
   }
 
   Future<void> _handleSubmit() async {
-    if (_selectedProofImages.isEmpty) {
-      setState(() {
-        _proofValidationError =
-            'Please take at least one photo as proof before submitting.';
-      });
-      return;
-    }
-
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -434,7 +426,11 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
       final proof = _proofController.text.trim();
       await widget.service.submit(
         _bounty.id,
-        proof: proof.isEmpty ? 'Photo proof submitted' : proof,
+        proof: proof.isNotEmpty
+            ? proof
+            : (_selectedProofImages.isNotEmpty
+                ? 'Photo proof submitted'
+                : 'Completed chore proof submitted.'),
         imagePaths: List<String>.from(_selectedProofImages),
       );
       if (widget.onRefresh != null) await widget.onRefresh!();

@@ -510,5 +510,14 @@ class ChoreStateAndIntegrityTest extends TestCase
             $diskPath = ltrim(str_replace('/storage/', '', $urlPath), '/');
             Storage::disk('public')->assertMissing($diskPath);
         }
+
+        // Resubmitting with text note only (without photos) succeeds
+        Sanctum::actingAs($member);
+        $this->postJson("/api/bounties/{$bounty->id}/submit", [
+            'submission_proof' => 'Done without photos',
+        ])->assertStatus(200)
+          ->assertJsonPath('data.status', 'submitted')
+          ->assertJsonPath('data.submission_proof', 'Done without photos')
+          ->assertJsonPath('data.submission_images', []);
     }
 }
