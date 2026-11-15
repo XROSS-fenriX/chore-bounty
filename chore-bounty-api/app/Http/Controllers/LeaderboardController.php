@@ -21,7 +21,7 @@ class LeaderboardController extends Controller
             'You are not a member of this household.'
         );
 
-        $period = $request->query('period', 'all');
+        $period = $this->resolvePeriod($request);
         $leaderboard = $this->leaderboardService->getHouseholdLeaderboard($household, $period);
 
         return response()->json([
@@ -53,7 +53,7 @@ class LeaderboardController extends Controller
             ]);
         }
 
-        $period = $request->query('period', 'all');
+        $period = $this->resolvePeriod($request);
         $leaderboard = $this->leaderboardService->getHouseholdLeaderboard($household, $period);
 
         return response()->json([
@@ -63,5 +63,12 @@ class LeaderboardController extends Controller
             ],
             'data' => $leaderboard,
         ]);
+    }
+
+    private function resolvePeriod(Request $request): string
+    {
+        $raw = strtolower((string) $request->query('period', 'all'));
+
+        return in_array($raw, ['all', 'week', 'month'], true) ? $raw : 'all';
     }
 }

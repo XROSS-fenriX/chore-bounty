@@ -19,7 +19,10 @@ class NotificationController extends Controller
             ->where(function ($q) use ($user) {
                 $q->whereNull('actor_id')->orWhere('actor_id', '!=', $user->id);
             })
-            ->with('actor')
+            ->with([
+                'actor',
+                'bounty' => fn ($q) => $q->withTrashed(),
+            ])
             ->latest('id');
 
         if ($householdId) {

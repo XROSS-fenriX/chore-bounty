@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\HouseholdResource;
+use App\Models\BountyClaim;
 use App\Models\Household;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
@@ -118,20 +120,51 @@ class HouseholdController extends Controller
             ], 422);
         }
 
-        $isOwner = $household->created_by === $userId;
-        $remainingMembers = $household->members()->where('users.id', '!=', $userId)->get();
+        DB::transaction(function () use ($household, $userId) {
+            BountyClaim::query()
+                ->where('user_id', $userId)
+                ->where('status', 'active')
+                ->whereHas('bounty', fn ($q) => $q->where('household_id', $household->id))
+                ->get()
+                ->each(function (BountyClaim $claim) {
+                    $claim->completions()
+                        ->where('status', 'pending')
+                        ->update([
+                            'status' => 'rejected',
+                            'reviewed_at' => now(),
+                        ]);
 
-        if ($isOwner && $remainingMembers->isNotEmpty()) {
-            $newOwner = $remainingMembers->first();
-            $household->update(['created_by' => $newOwner->id]);
-            $household->members()->updateExistingPivot($newOwner->id, ['role' => 'owner']);
-        }
+                    $claim->update([
+                        'status' => 'released',
+                        'released_at' => now(),
+                    ]);
+                });
 
-        $household->members()->detach($userId);
+            $household->bounties()
+                ->where('assignee_id', $userId)
+                ->whereIn('status', ['claimed', 'in_progress', 'submitted'])
+                ->update([
+                    'status' => 'open',
+                    'assignee_id' => null,
+                    'claimed_at' => null,
+                    'submitted_at' => null,
+                ]);
 
-        if ($household->members()->count() === 0) {
-            $household->delete();
-        }
+            $isOwner = $household->created_by === $userId;
+            $remainingMembers = $household->members()->where('users.id', '!=', $userId)->get();
+
+            if ($isOwner && $remainingMembers->isNotEmpty()) {
+                $newOwner = $remainingMembers->first();
+                $household->update(['created_by' => $newOwner->id]);
+                $household->members()->updateExistingPivot($newOwner->id, ['role' => 'owner']);
+            }
+
+            $household->members()->detach($userId);
+
+            if ($household->members()->count() === 0 && ! $household->bounties()->withTrashed()->exists()) {
+                $household->delete();
+            }
+        });
 
         return response()->json([
             'message' => 'Successfully left the household.',

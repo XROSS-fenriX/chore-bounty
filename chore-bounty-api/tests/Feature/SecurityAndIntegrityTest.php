@@ -220,6 +220,7 @@ class SecurityAndIntegrityTest extends TestCase
     {
         $creator = User::factory()->create(['first_name' => 'Sheldon', 'last_name' => 'Cooper']);
         $roommate = User::factory()->create(['first_name' => 'Leonard', 'last_name' => 'Hofstadter']);
+        $observer = User::factory()->create(['first_name' => 'Penny', 'last_name' => 'Teller']);
 
         $household = Household::create([
             'name' => 'Apt 4A',
@@ -228,6 +229,7 @@ class SecurityAndIntegrityTest extends TestCase
         ]);
         $household->members()->attach($creator->id, ['role' => 'owner', 'joined_at' => now()]);
         $household->members()->attach($roommate->id, ['role' => 'member', 'joined_at' => now()]);
+        $household->members()->attach($observer->id, ['role' => 'member', 'joined_at' => now()]);
 
         // 1. Creator posts a bounty -> generates 'posted' notification
         Sanctum::actingAs($creator);
@@ -272,14 +274,14 @@ class SecurityAndIntegrityTest extends TestCase
         $this->putJson("/api/bounties/{$bountyId}", ['title' => 'Blocked Edit'])->assertStatus(403);
         $this->deleteJson("/api/bounties/{$bountyId}")->assertStatus(403);
 
-        // 4. Creator approves (awards) the bounty -> generates 'awarded' notification
+        // 4. Creator approves the bounty -> assignee receives 'approved', observer receives 'awarded'
         $this->postJson("/api/bounties/{$bountyId}/verify")->assertStatus(200);
 
         // Creator CANNOT edit or delete when completed
         $this->putJson("/api/bounties/{$bountyId}", ['title' => 'Blocked Edit'])->assertStatus(403);
         $this->deleteJson("/api/bounties/{$bountyId}")->assertStatus(403);
 
-        // 5. Creator posts a second bounty, roommate claims it, creator cancels and deletes
+        // 5. Creator posts a second bounty, roommate claims it; taken chore cannot be deleted directly, must cancel first
         $bounty2 = Bounty::create([
             'household_id' => $household->id,
             'created_by' => $creator->id,
@@ -293,7 +295,8 @@ class SecurityAndIntegrityTest extends TestCase
             'status' => 'claimed',
         ]);
 
-        // Creator can delete a taken bounty
+        $this->deleteJson("/api/bounties/{$bounty2->id}")->assertStatus(403);
+        $this->postJson("/api/bounties/{$bounty2->id}/cancel")->assertStatus(200);
         $this->deleteJson("/api/bounties/{$bounty2->id}")->assertStatus(204);
 
         // 6. Creator posts a third bounty and cancels it -> generates 'cancelled' notification
@@ -310,22 +313,31 @@ class SecurityAndIntegrityTest extends TestCase
         ]);
         $this->postJson("/api/bounties/{$bounty3->id}/cancel")->assertStatus(200);
 
-        // Cancelled bounty cannot be edited or deleted
+        // Cancelled bounty cannot be edited, but CAN be deleted
         $this->putJson("/api/bounties/{$bounty3->id}", ['title' => 'No edit'])->assertStatus(403);
-        $this->deleteJson("/api/bounties/{$bounty3->id}")->assertStatus(403);
+        $this->deleteJson("/api/bounties/{$bounty3->id}")->assertStatus(204);
 
-        // 7. Verify notifications endpoint returns only events triggered by other users
+        // 7. Assignee sees 'posted', 'approved', and 'cancelled', but NOT 'awarded' or own 'claimed'/'submitted'
         Sanctum::actingAs($roommate);
         $notifRes = $this->getJson("/api/notifications?household_id={$household->id}")
             ->assertStatus(200);
 
         $events = collect($notifRes->json('data'))->pluck('event_type')->all();
         $this->assertContains('posted', $events);
-        $this->assertContains('awarded', $events);
+        $this->assertContains('approved', $events);
         $this->assertContains('cancelled', $events);
+        $this->assertNotContains('awarded', $events);
         $this->assertNotContains('claimed', $events);
         $this->assertNotContains('submitted', $events);
-        $this->assertSame(3, $notifRes->json('meta.unread_count'));
+        $this->assertSame(4, $notifRes->json('meta.unread_count'));
+
+        // Observer sees 'awarded' (and not 'approved')
+        Sanctum::actingAs($observer);
+        $observerNotifs = $this->getJson("/api/notifications?household_id={$household->id}")
+            ->assertStatus(200);
+        $observerEvents = collect($observerNotifs->json('data'))->pluck('event_type')->all();
+        $this->assertContains('awarded', $observerEvents);
+        $this->assertNotContains('approved', $observerEvents);
 
         // Creator sees events triggered by roommate (claimed, submitted), but not own events (posted, awarded, cancelled)
         Sanctum::actingAs($creator);
@@ -335,6 +347,7 @@ class SecurityAndIntegrityTest extends TestCase
         $this->assertContains('claimed', $creatorEvents);
         $this->assertContains('submitted', $creatorEvents);
         $this->assertNotContains('posted', $creatorEvents);
+        $this->assertNotContains('approved', $creatorEvents);
         $this->assertNotContains('awarded', $creatorEvents);
         $this->assertNotContains('cancelled', $creatorEvents);
         $this->assertSame(2, $creatorNotifs->json('meta.unread_count'));

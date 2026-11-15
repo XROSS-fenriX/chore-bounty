@@ -16,6 +16,17 @@ class BountyNotificationResource extends JsonResource
             'user_id' => $this->user_id,
             'actor_id' => $this->actor_id,
             'actor_name' => $this->whenLoaded('actor', fn () => $this->actor?->name),
+            'bounty' => $this->whenLoaded('bounty', function () {
+                if (! $this->bounty) {
+                    return null;
+                }
+
+                return [
+                    'id' => $this->bounty->id,
+                    'title' => $this->bounty->title,
+                    'tokens' => $this->bounty->tokens(),
+                ];
+            }),
             'event_type' => $this->event_type,
             'event_name' => $this->event_name,
             'description' => $this->description,

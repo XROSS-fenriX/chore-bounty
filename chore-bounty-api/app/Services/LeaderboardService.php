@@ -26,7 +26,7 @@ class LeaderboardService
             }
         };
 
-        return $household->members()
+        $rows = $household->members()
             ->withCount([
                 'assignedBounties as completed_bounties_count' => $completedScope,
                 'assignedBounties as active_bounties_count' => function ($query) use ($household) {
@@ -40,18 +40,15 @@ class LeaderboardService
             ->withSum([
                 'assignedBounties as fallback_xp_earned' => $completedScope,
             ], 'xp_reward')
-            ->orderByDesc('total_tokens_earned')
-            ->orderByDesc('completed_bounties_count')
             ->get()
-            ->map(function ($user, $index) {
+            ->map(function ($user) {
                 $tokens = (int) ($user->total_tokens_earned ?? 0);
                 if ($tokens === 0 && isset($user->fallback_xp_earned) && $user->fallback_xp_earned > 0) {
                     $tokens = (int) $user->fallback_xp_earned;
                 }
 
                 return [
-                    'rank' => $index + 1,
-                    'user_id' => $user->id,
+                    'user_id' => (int) $user->id,
                     'first_name' => $user->first_name,
                     'middle_name' => $user->middle_name,
                     'last_name' => $user->last_name,
@@ -66,7 +63,29 @@ class LeaderboardService
                     'total_reward_value' => (float) $tokens,
                     'tier' => $this->calculateRpgTier($tokens),
                 ];
-            });
+            })
+            ->sort(function (array $a, array $b) {
+                return ($b['total_tokens'] <=> $a['total_tokens'])
+                    ?: ($b['completed_bounties_count'] <=> $a['completed_bounties_count'])
+                    ?: (strtolower((string) $a['name']) <=> strtolower((string) $b['name']))
+                    ?: ($a['user_id'] <=> $b['user_id']);
+            })
+            ->values();
+
+        $previousTokens = null;
+        $currentRank = 0;
+
+        return $rows->map(function (array $row, int $index) use (&$previousTokens, &$currentRank) {
+            if ($previousTokens === null || $row['total_tokens'] !== $previousTokens) {
+                $currentRank = $index + 1;
+                $previousTokens = $row['total_tokens'];
+            }
+
+            return [
+                'rank' => $currentRank,
+                ...$row,
+            ];
+        });
     }
 
     public function calculateRpgTier(int $tokens): string

@@ -132,7 +132,11 @@ class BountyCompletionController extends Controller
                 $claim->update(['status' => 'completed']);
                 $bounty->update(['status' => 'completed']);
             } else {
-                $bounty->update(['status' => 'open']);
+                $bounty->update([
+                    'status' => 'open',
+                    'assignee_id' => null,
+                    'claimed_at' => null,
+                ]);
                 $claim->update([
                     'status' => 'released',
                     'released_at' => now(),

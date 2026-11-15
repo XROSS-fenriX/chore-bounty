@@ -23,6 +23,10 @@ class BountyActionController extends Controller
         DB::transaction(function () use ($user, $bounty) {
             $lockedBounty = Bounty::whereKey($bounty->id)->lockForUpdate()->firstOrFail();
 
+            if (! $lockedBounty->isAvailable() || $lockedBounty->claims()->where('status', 'active')->exists()) {
+                abort(422, 'This bounty is no longer available for claiming.');
+            }
+
             $lockedBounty->update([
                 'assignee_id' => $user->id,
                 'status' => 'claimed',
@@ -128,68 +132,81 @@ class BountyActionController extends Controller
     {
         Gate::authorize('complete', $bounty);
 
-        $user = $request->user();
-
-        DB::transaction(function () use ($user, $bounty) {
-            $lockedBounty = Bounty::whereKey($bounty->id)->lockForUpdate()->firstOrFail();
-            $assigneeId = $lockedBounty->assignee_id ?? $user->id;
-
-            $lockedBounty->update([
-                'assignee_id' => $assigneeId,
-                'status' => 'completed',
-                'completed_at' => now(),
-            ]);
-
-            $this->finalizeCompletion($lockedBounty, $user->id);
-        });
-
-        $fresh = $bounty->fresh()->load(['creator', 'assignee', 'household']);
-        $tokens = (int) ($fresh->reward_value ?: $fresh->xp_reward ?: 50);
-        $assigneeName = $fresh->assignee?->name ?? 'Roommate';
-        BountyNotification::dispatchForHousehold(
-            $fresh,
-            $user,
-            'awarded',
-            'Bounty Awarded',
-            "{$user->name} awarded {$tokens} Tokens to {$assigneeName} for \"{$fresh->title}\"."
+        return $this->approve(
+            $request,
+            $bounty,
+            assignActorIfMissing: true,
+            message: 'Bounty marked as completed! Points disbursed.'
         );
-
-        return response()->json([
-            'message' => 'Bounty marked as completed! Points disbursed.',
-            'data' => new BountyResource($fresh),
-        ]);
     }
 
     public function verify(ReviewBountyRequest $request, Bounty $bounty): JsonResponse
     {
         Gate::authorize('verify', $bounty);
 
+        return $this->approve(
+            $request,
+            $bounty,
+            assignActorIfMissing: false,
+            message: 'Bounty approved! Tokens disbursed to assignee.'
+        );
+    }
+
+    private function approve(
+        Request $request,
+        Bounty $bounty,
+        bool $assignActorIfMissing,
+        string $message
+    ): JsonResponse {
         $user = $request->user();
 
-        DB::transaction(function () use ($user, $bounty) {
+        DB::transaction(function () use ($user, $bounty, $assignActorIfMissing) {
             $lockedBounty = Bounty::whereKey($bounty->id)->lockForUpdate()->firstOrFail();
 
-            $lockedBounty->update([
+            if ($lockedBounty->status === 'completed') {
+                abort(422, 'This bounty has already been completed.');
+            }
+
+            $updates = [
                 'status' => 'completed',
                 'completed_at' => now(),
-            ]);
+            ];
+            if ($assignActorIfMissing) {
+                $updates['assignee_id'] = $lockedBounty->assignee_id ?? $user->id;
+            }
+
+            $lockedBounty->update($updates);
 
             $this->finalizeCompletion($lockedBounty, $user->id);
         });
 
         $fresh = $bounty->fresh()->load(['creator', 'assignee', 'household']);
-        $tokens = (int) ($fresh->reward_value ?: $fresh->xp_reward ?: 50);
+        $tokens = $fresh->tokens();
+        $assigneeId = (int) ($fresh->assignee_id ?? 0);
         $assigneeName = $fresh->assignee?->name ?? 'Roommate';
+
+        if ($assigneeId > 0 && $assigneeId !== (int) $user->id) {
+            BountyNotification::dispatchToUser(
+                $fresh,
+                $user,
+                $assigneeId,
+                'approved',
+                'Chore Approved!',
+                "{$user->name} approved \"{$fresh->title}\" (+{$tokens} Tokens)."
+            );
+        }
+
         BountyNotification::dispatchForHousehold(
             $fresh,
             $user,
             'awarded',
             'Bounty Awarded',
-            "{$user->name} awarded {$tokens} Tokens to {$assigneeName} for \"{$fresh->title}\"."
+            "{$user->name} awarded {$tokens} Tokens to {$assigneeName} for \"{$fresh->title}\".",
+            $assigneeId > 0 ? [$assigneeId] : []
         );
 
         return response()->json([
-            'message' => 'Bounty approved! Tokens disbursed to assignee.',
+            'message' => $message,
             'data' => new BountyResource($fresh),
         ]);
     }
@@ -227,6 +244,7 @@ class BountyActionController extends Controller
         Gate::authorize('verify', $bounty);
 
         $user = $request->user();
+        $feedback = trim((string) ($request->validated('feedback') ?? ''));
 
         DB::transaction(function () use ($user, $bounty) {
             $lockedBounty = Bounty::whereKey($bounty->id)->lockForUpdate()->firstOrFail();
@@ -249,9 +267,25 @@ class BountyActionController extends Controller
             }
         });
 
+        $fresh = $bounty->fresh()->load(['creator', 'assignee', 'household']);
+        if ($fresh->assignee_id) {
+            $description = $feedback !== ''
+                ? "{$user->name} requested a redo on \"{$fresh->title}\": {$feedback}"
+                : "{$user->name} requested a redo on \"{$fresh->title}\".";
+
+            BountyNotification::dispatchToUser(
+                $fresh,
+                $user,
+                (int) $fresh->assignee_id,
+                'redo',
+                'Redo Requested',
+                $description
+            );
+        }
+
         return response()->json([
             'message' => 'Proof was not approved. Task returned to in-progress.',
-            'data' => new BountyResource($bounty->fresh()->load(['creator', 'assignee', 'household'])),
+            'data' => new BountyResource($fresh),
         ]);
     }
 
@@ -259,15 +293,39 @@ class BountyActionController extends Controller
     {
         Gate::authorize('cancel', $bounty);
 
-        $bounty->update(['status' => 'cancelled']);
+        $user = $request->user();
+
+        DB::transaction(function () use ($bounty, $user) {
+            $lockedBounty = Bounty::whereKey($bounty->id)->lockForUpdate()->firstOrFail();
+
+            $lockedBounty->claims()
+                ->where('status', 'active')
+                ->get()
+                ->each(function ($claim) use ($user) {
+                    $claim->completions()
+                        ->where('status', 'pending')
+                        ->update([
+                            'status' => 'rejected',
+                            'reviewed_by' => $user->id,
+                            'reviewed_at' => now(),
+                        ]);
+
+                    $claim->update([
+                        'status' => 'released',
+                        'released_at' => now(),
+                    ]);
+                });
+
+            $lockedBounty->update(['status' => 'cancelled']);
+        });
 
         $fresh = $bounty->fresh()->load(['creator', 'assignee', 'household']);
         BountyNotification::dispatchForHousehold(
             $fresh,
-            $request->user(),
+            $user,
             'cancelled',
             'Chore Cancelled',
-            "{$request->user()->name} cancelled \"{$fresh->title}\"."
+            "{$user->name} cancelled \"{$fresh->title}\"."
         );
 
         return response()->json([

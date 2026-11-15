@@ -32,26 +32,13 @@ class BountyPolicy
             : Response::deny('You must belong to this household to create bounties.');
     }
 
-    private function isAvailableOrTaken(Bounty $bounty): bool
-    {
-        if (in_array($bounty->status, ['claimed', 'in_progress'], true)) {
-            return true;
-        }
-
-        if ($bounty->status === 'open') {
-            return $bounty->due_at === null || $bounty->due_at->isFuture();
-        }
-
-        return false;
-    }
-
     public function update(User $user, Bounty $bounty): Response
     {
         if ($bounty->created_by !== $user->id) {
             return Response::deny('Only the bounty creator can update this quest.');
         }
 
-        if (! $this->isAvailableOrTaken($bounty)) {
+        if (! ($bounty->isAvailable() || $bounty->isTaken())) {
             return Response::deny('Chores can only be edited when available or taken.');
         }
 
@@ -60,9 +47,11 @@ class BountyPolicy
 
     public function delete(User $user, Bounty $bounty): Response
     {
-        return ($bounty->created_by === $user->id && $this->isAvailableOrTaken($bounty))
+        $canDelete = $bounty->isAvailable() || $bounty->isCancelled() || $bounty->isExpired();
+
+        return ($bounty->created_by === $user->id && $canDelete)
             ? Response::allow()
-            : Response::deny('Chores can only be deleted by their creator when available or taken.');
+            : Response::deny('Chores can only be deleted by their creator when available, cancelled, or expired.');
     }
 
     public function claim(User $user, Bounty $bounty): Response
@@ -75,7 +64,7 @@ class BountyPolicy
             return Response::deny('You cannot claim your own bounty.');
         }
 
-        if ($bounty->status !== 'open') {
+        if (! $bounty->isAvailable()) {
             return Response::deny('This bounty is no longer available for claiming.');
         }
 
@@ -130,7 +119,7 @@ class BountyPolicy
 
     public function cancel(User $user, Bounty $bounty): Response
     {
-        return $bounty->created_by === $user->id && in_array($bounty->status, ['open', 'claimed', 'in_progress'])
+        return $bounty->created_by === $user->id && ($bounty->isAvailable() || $bounty->isTaken())
             ? Response::allow()
             : Response::deny('Only the quest creator can cancel active bounties.');
     }

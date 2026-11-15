@@ -16,16 +16,6 @@ class UpdateBountyRequest extends FormRequest
     {
         $merge = [];
 
-        // Support category input to map to difficulty
-        if (! $this->has('difficulty') && $this->has('category')) {
-            $cat = strtolower((string) $this->input('category'));
-            $merge['difficulty'] = match ($cat) {
-                'hard', 'epic' => 'hard',
-                'medium', 'moderate' => 'medium',
-                default => 'easy',
-            };
-        }
-
         // Support points as reward_value
         if (! $this->has('reward_value') && $this->has('points')) {
             $merge['reward_value'] = (float) $this->input('points');

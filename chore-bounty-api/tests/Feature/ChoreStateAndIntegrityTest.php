@@ -1,0 +1,330 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Bounty;
+use App\Models\BountyClaim;
+use App\Models\BountyCompletion;
+use App\Models\Household;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
+use Tests\TestCase;
+
+class ChoreStateAndIntegrityTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private function seedHousehold(): array
+    {
+        $creator = User::factory()->create(['first_name' => 'Sheldon', 'last_name' => 'Cooper']);
+        $member = User::factory()->create(['first_name' => 'Leonard', 'last_name' => 'Hofstadter']);
+        $observer = User::factory()->create(['first_name' => 'Penny', 'last_name' => 'Teller']);
+
+        $household = Household::create([
+            'name' => 'Apt 4A',
+            'invite_code' => 'STATE123',
+            'created_by' => $creator->id,
+        ]);
+        $household->members()->attach($creator->id, ['role' => 'owner', 'joined_at' => now()]);
+        $household->members()->attach($member->id, ['role' => 'member', 'joined_at' => now()]);
+        $household->members()->attach($observer->id, ['role' => 'member', 'joined_at' => now()]);
+
+        return [$creator, $member, $observer, $household];
+    }
+
+    private function createBounty(Household $household, User $creator, array $overrides = []): Bounty
+    {
+        return Bounty::create([
+            'household_id' => $household->id,
+            'created_by' => $creator->id,
+            'title' => 'Sample chore',
+            'category' => 'Cleaning',
+            'difficulty' => 'easy',
+            'xp_reward' => 25,
+            'reward_value' => 25,
+            'reward_description' => '25 Tokens',
+            'status' => 'open',
+            ...$overrides,
+        ]);
+    }
+
+    public function test_state_matrix_for_creator_and_non_creator(): void
+    {
+        [$creator, $member, , $household] = $this->seedHousehold();
+
+        // Available
+        $available = $this->createBounty($household, $creator, [
+            'due_at' => now()->addHour(),
+        ]);
+        Sanctum::actingAs($member);
+        $this->putJson("/api/bounties/{$available->id}", ['title' => 'No'])->assertStatus(403);
+        $this->postJson("/api/bounties/{$available->id}/cancel")->assertStatus(403);
+        $this->deleteJson("/api/bounties/{$available->id}")->assertStatus(403);
+
+        Sanctum::actingAs($creator);
+        $this->postJson("/api/bounties/{$available->id}/claim")->assertStatus(403);
+        $this->putJson("/api/bounties/{$available->id}", ['title' => 'Updated'])->assertStatus(200);
+        $this->deleteJson("/api/bounties/{$available->id}")->assertStatus(204);
+
+        // Taken (even if past due)
+        $taken = $this->createBounty($household, $creator, [
+            'status' => 'claimed',
+            'assignee_id' => $member->id,
+            'due_at' => now()->subHours(2),
+        ]);
+        $pastDueStr = $taken->due_at->toIso8601String();
+        Sanctum::actingAs($member);
+        $this->putJson("/api/bounties/{$taken->id}", ['title' => 'No'])->assertStatus(403);
+        $this->postJson("/api/bounties/{$taken->id}/cancel")->assertStatus(403);
+        $this->deleteJson("/api/bounties/{$taken->id}")->assertStatus(403);
+        $this->postJson("/api/bounties/{$taken->id}/claim")->assertStatus(403);
+
+        Sanctum::actingAs($creator);
+        $this->deleteJson("/api/bounties/{$taken->id}")->assertStatus(403);
+        $this->putJson("/api/bounties/{$taken->id}", [
+            'title' => 'Still Taken',
+            'due_at' => $pastDueStr,
+        ])->assertStatus(200)->assertJsonPath('data.title', 'Still Taken');
+        $this->postJson("/api/bounties/{$taken->id}/cancel")->assertStatus(200);
+
+        // Cancelled
+        Sanctum::actingAs($member);
+        $this->deleteJson("/api/bounties/{$taken->id}")->assertStatus(403);
+        Sanctum::actingAs($creator);
+        $this->putJson("/api/bounties/{$taken->id}", ['title' => 'No'])->assertStatus(403);
+        $this->postJson("/api/bounties/{$taken->id}/cancel")->assertStatus(403);
+        $this->postJson("/api/bounties/{$taken->id}/claim")->assertStatus(403);
+        $this->deleteJson("/api/bounties/{$taken->id}")->assertStatus(204);
+
+        // Expired
+        $expired = $this->createBounty($household, $creator, [
+            'due_at' => now()->subMinutes(10),
+        ]);
+        Sanctum::actingAs($member);
+        $this->postJson("/api/bounties/{$expired->id}/claim")->assertStatus(403);
+        $this->deleteJson("/api/bounties/{$expired->id}")->assertStatus(403);
+        Sanctum::actingAs($creator);
+        $this->putJson("/api/bounties/{$expired->id}", ['title' => 'No'])->assertStatus(403);
+        $this->postJson("/api/bounties/{$expired->id}/cancel")->assertStatus(403);
+        $this->deleteJson("/api/bounties/{$expired->id}")->assertStatus(204);
+
+        // Submitted & Completed
+        $submitted = $this->createBounty($household, $creator, [
+            'status' => 'submitted',
+            'assignee_id' => $member->id,
+        ]);
+        Sanctum::actingAs($creator);
+        $this->putJson("/api/bounties/{$submitted->id}", ['title' => 'No'])->assertStatus(403);
+        $this->postJson("/api/bounties/{$submitted->id}/cancel")->assertStatus(403);
+        $this->deleteJson("/api/bounties/{$submitted->id}")->assertStatus(403);
+
+        $completed = $this->createBounty($household, $creator, [
+            'status' => 'completed',
+            'assignee_id' => $member->id,
+        ]);
+        $this->putJson("/api/bounties/{$completed->id}", ['title' => 'No'])->assertStatus(403);
+        $this->postJson("/api/bounties/{$completed->id}/cancel")->assertStatus(403);
+        $this->deleteJson("/api/bounties/{$completed->id}")->assertStatus(403);
+    }
+
+    public function test_cancel_taken_chore_releases_claim_and_rejects_pending_completion(): void
+    {
+        [$creator, $member, , $household] = $this->seedHousehold();
+        $bounty = $this->createBounty($household, $creator);
+
+        Sanctum::actingAs($member);
+        $this->postJson("/api/bounties/{$bounty->id}/claim")->assertStatus(200);
+
+        $claim = BountyClaim::where('bounty_id', $bounty->id)->where('status', 'active')->firstOrFail();
+        $completion = $claim->completions()->create([
+            'submission_note' => 'Done',
+            'status' => 'pending',
+            'submitted_at' => now(),
+        ]);
+
+        Sanctum::actingAs($creator);
+        $this->postJson("/api/bounties/{$bounty->id}/cancel")->assertStatus(200);
+
+        $this->assertSame('cancelled', $bounty->fresh()->status);
+        $this->assertSame('released', $claim->fresh()->status);
+        $this->assertNotNull($claim->fresh()->released_at);
+        $this->assertSame('rejected', $completion->fresh()->status);
+    }
+
+    public function test_second_claim_on_claimed_chore_is_rejected_and_only_one_active_claim_exists(): void
+    {
+        [$creator, $member, $observer, $household] = $this->seedHousehold();
+        $bounty = $this->createBounty($household, $creator);
+
+        Sanctum::actingAs($member);
+        $this->postJson("/api/bounties/{$bounty->id}/claim")->assertStatus(200);
+
+        Sanctum::actingAs($observer);
+        $res = $this->postJson("/api/bounties/{$bounty->id}/claim");
+        $this->assertContains($res->getStatusCode(), [403, 422]);
+
+        $this->assertSame(
+            1,
+            BountyClaim::where('bounty_id', $bounty->id)->where('status', 'active')->count()
+        );
+    }
+
+    public function test_approve_sends_approved_to_assignee_awarded_to_others_and_includes_bounty_payload(): void
+    {
+        [$creator, $member, $observer, $household] = $this->seedHousehold();
+        $bounty = $this->createBounty($household, $creator, [
+            'title' => 'Buy water',
+            'reward_value' => 10,
+            'xp_reward' => 10,
+            'reward_description' => '10 Tokens',
+        ]);
+
+        Sanctum::actingAs($member);
+        $this->postJson("/api/bounties/{$bounty->id}/claim")->assertStatus(200);
+        $this->postJson("/api/bounties/{$bounty->id}/submit", ['submission_proof' => 'Bought it'])->assertStatus(200);
+
+        Sanctum::actingAs($creator);
+        $this->postJson("/api/bounties/{$bounty->id}/verify")->assertStatus(200);
+
+        Sanctum::actingAs($member);
+        $memberNotifs = $this->getJson("/api/notifications?household_id={$household->id}")
+            ->assertStatus(200)
+            ->json('data');
+        $approvedRows = collect($memberNotifs)->where('event_type', 'approved')->values();
+        $this->assertCount(1, $approvedRows);
+        $this->assertSame('Buy water', $approvedRows[0]['bounty']['title']);
+        $this->assertSame(10, $approvedRows[0]['bounty']['tokens']);
+        $this->assertEmpty(collect($memberNotifs)->where('event_type', 'awarded'));
+
+        Sanctum::actingAs($observer);
+        $observerNotifs = $this->getJson("/api/notifications?household_id={$household->id}")
+            ->assertStatus(200)
+            ->json('data');
+        $this->assertCount(1, collect($observerNotifs)->where('event_type', 'awarded'));
+        $this->assertEmpty(collect($observerNotifs)->where('event_type', 'approved'));
+
+        Sanctum::actingAs($creator);
+        $creatorNotifs = $this->getJson("/api/notifications?household_id={$household->id}")
+            ->assertStatus(200)
+            ->json('data');
+        $this->assertEmpty(collect($creatorNotifs)->whereIn('event_type', ['approved', 'awarded']));
+    }
+
+    public function test_reject_with_feedback_sends_redo_notification_to_assignee(): void
+    {
+        [$creator, $member, , $household] = $this->seedHousehold();
+        $bounty = $this->createBounty($household, $creator, ['title' => 'Sweep porch']);
+
+        Sanctum::actingAs($member);
+        $this->postJson("/api/bounties/{$bounty->id}/claim")->assertStatus(200);
+        $this->postJson("/api/bounties/{$bounty->id}/submit", ['submission_proof' => 'Swept'])->assertStatus(200);
+
+        Sanctum::actingAs($creator);
+        $this->postJson("/api/bounties/{$bounty->id}/reject", [
+            'feedback' => 'Missed the corners',
+        ])->assertStatus(200);
+
+        Sanctum::actingAs($member);
+        $notifs = $this->getJson("/api/notifications?household_id={$household->id}")
+            ->assertStatus(200)
+            ->json('data');
+        $redo = collect($notifs)->firstWhere('event_type', 'redo');
+        $this->assertNotNull($redo);
+        $this->assertStringContainsString('Missed the corners', $redo['description']);
+    }
+
+    public function test_household_leave_releases_claims_and_keeps_household_when_chores_exist(): void
+    {
+        [$creator, $member, $observer, $household] = $this->seedHousehold();
+        $bounty = $this->createBounty($household, $creator);
+
+        Sanctum::actingAs($member);
+        $this->postJson("/api/bounties/{$bounty->id}/claim")->assertStatus(200);
+        $this->postJson("/api/households/{$household->id}/leave")->assertStatus(200);
+
+        $bounty->refresh();
+        $this->assertSame('open', $bounty->status);
+        $this->assertNull($bounty->assignee_id);
+        $this->assertSame(
+            'released',
+            BountyClaim::where('bounty_id', $bounty->id)->firstOrFail()->status
+        );
+
+        // Remaining members leave -> household has chores so it must not throw 500 and remains in DB
+        Sanctum::actingAs($observer);
+        $this->postJson("/api/households/{$household->id}/leave")->assertStatus(200);
+
+        Sanctum::actingAs($creator);
+        $this->postJson("/api/households/{$household->id}/leave")->assertStatus(200);
+
+        $this->assertDatabaseHas('households', ['id' => $household->id]);
+    }
+
+    public function test_leaderboard_ties_share_rank_and_bogus_period_falls_back_to_all(): void
+    {
+        [$creator, $member, $observer, $household] = $this->seedHousehold();
+
+        $this->createBounty($household, $creator, [
+            'assignee_id' => $member->id,
+            'status' => 'completed',
+            'completed_at' => now()->subMonths(2),
+            'reward_value' => 100,
+            'xp_reward' => 100,
+        ]);
+        $this->createBounty($household, $creator, [
+            'assignee_id' => $observer->id,
+            'status' => 'completed',
+            'completed_at' => now()->subMonths(2),
+            'reward_value' => 100,
+            'xp_reward' => 100,
+        ]);
+
+        Sanctum::actingAs($creator);
+        $res = $this->getJson("/api/households/{$household->id}/leaderboard?period=bogus")
+            ->assertStatus(200)
+            ->json('data');
+
+        // Leonard Hofstadter and Penny Teller both have 100 -> both rank 1; Sheldon has 0 -> rank 3
+        $this->assertSame(1, $res[0]['rank']);
+        $this->assertSame(1, $res[1]['rank']);
+        $this->assertSame(3, $res[2]['rank']);
+        $this->assertSame(100, $res[0]['total_tokens']);
+    }
+
+    public function test_legacy_completion_reject_clears_assignee_id_and_update_preserves_difficulty(): void
+    {
+        [$creator, $member, , $household] = $this->seedHousehold();
+        $bounty = $this->createBounty($household, $creator, [
+            'difficulty' => 'hard',
+            'category' => 'Kitchen',
+        ]);
+
+        // Update with category only does not overwrite difficulty
+        Sanctum::actingAs($creator);
+        $this->putJson("/api/bounties/{$bounty->id}", ['category' => 'Groceries'])
+            ->assertStatus(200)
+            ->assertJsonPath('data.difficulty', 'hard')
+            ->assertJsonPath('data.category', 'Groceries');
+
+        // Legacy claim + completion reject clears assignee_id
+        Sanctum::actingAs($member);
+        $this->postJson("/api/bounties/{$bounty->id}/claim")->assertStatus(200);
+        $claim = BountyClaim::where('bounty_id', $bounty->id)->where('status', 'active')->firstOrFail();
+        $completion = BountyCompletion::create([
+            'bounty_claim_id' => $claim->id,
+            'submission_note' => 'Done',
+            'status' => 'pending',
+            'submitted_at' => now(),
+        ]);
+
+        Sanctum::actingAs($creator);
+        $this->patchJson("/api/completions/{$completion->id}", ['status' => 'rejected'])
+            ->assertStatus(200);
+
+        $bounty->refresh();
+        $this->assertSame('open', $bounty->status);
+        $this->assertNull($bounty->assignee_id);
+        $this->assertNull($bounty->claimed_at);
+    }
+}

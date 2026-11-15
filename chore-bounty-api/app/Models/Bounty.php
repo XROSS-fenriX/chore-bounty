@@ -113,6 +113,44 @@ class Bounty extends Model
         return $this->claims()->where('status', 'active');
     }
 
+    public function isAvailable(): bool
+    {
+        if ($this->status !== 'open') {
+            return false;
+        }
+
+        return $this->due_at === null || $this->due_at->isFuture();
+    }
+
+    public function isExpired(): bool
+    {
+        return $this->status === 'open'
+            && $this->due_at !== null
+            && ! $this->due_at->isFuture();
+    }
+
+    public function isTaken(): bool
+    {
+        return in_array($this->status, ['claimed', 'in_progress'], true);
+    }
+
+    public function isCancelled(): bool
+    {
+        return in_array($this->status, ['cancelled', 'canceled'], true);
+    }
+
+    public function tokens(): int
+    {
+        $reward = (int) round((float) ($this->reward_value ?? 0));
+        if ($reward > 0) {
+            return $reward;
+        }
+
+        $xp = (int) ($this->xp_reward ?? 0);
+
+        return $xp > 0 ? $xp : 50;
+    }
+
     // Local Query Scopes
     public function scopeForHousehold(Builder $query, int $householdId): Builder
     {

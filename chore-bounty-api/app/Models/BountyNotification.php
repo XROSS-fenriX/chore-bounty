@@ -53,7 +53,8 @@ class BountyNotification extends Model
         User $actor,
         string $eventType,
         string $eventName,
-        string $description
+        string $description,
+        array $exceptUserIds = []
     ): void {
         $memberIds = HouseholdUser::query()
             ->where('household_id', $bounty->household_id)
@@ -66,10 +67,12 @@ class BountyNotification extends Model
             $bounty->assignee_id,
         ])));
 
-        // Only notify other users (do not notify the actor who triggered or posted the event)
+        $excluded = array_map('intval', [$actor->id, ...$exceptUserIds]);
+
+        // Only notify other users (do not notify the actor or explicitly excluded recipients)
         $recipientIds = array_values(array_filter(
             $recipientIds,
-            fn ($id) => (int) $id !== (int) $actor->id
+            fn ($id) => ! in_array((int) $id, $excluded, true)
         ));
 
         $now = now();
@@ -94,5 +97,31 @@ class BountyNotification extends Model
         if (! empty($rows)) {
             self::insert($rows);
         }
+    }
+
+    public static function dispatchToUser(
+        Bounty $bounty,
+        User $actor,
+        int $recipientId,
+        string $eventType,
+        string $eventName,
+        string $description
+    ): ?self {
+        if ($recipientId <= 0 || $recipientId === (int) $actor->id) {
+            return null;
+        }
+
+        return self::create([
+            'household_id' => $bounty->household_id,
+            'bounty_id' => $bounty->id,
+            'user_id' => $recipientId,
+            'actor_id' => $actor->id,
+            'event_type' => $eventType,
+            'event_name' => $eventName,
+            'description' => $description,
+            'category' => $bounty->category ?? 'Other',
+            'is_read' => false,
+            'read_at' => null,
+        ]);
     }
 }

@@ -56,7 +56,7 @@ class BountyController extends Controller
             'status' => 'open',
         ]);
 
-        $tokens = (int) ($bounty->reward_value ?: $bounty->xp_reward ?: 50);
+        $tokens = $bounty->tokens();
         BountyNotification::dispatchForHousehold(
             $bounty,
             $request->user(),
