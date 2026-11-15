@@ -123,6 +123,151 @@ String formatOrdinalRank(int rank) {
   }
 }
 
+class AppModalDialog extends StatelessWidget {
+  const AppModalDialog({
+    super.key,
+    required this.title,
+    required this.content,
+    required this.primaryLabel,
+    required this.onPrimary,
+    this.primaryColor = const Color(0xFF1B8354),
+    this.primaryForegroundColor = Colors.white,
+    this.primaryBorderColor,
+    this.secondaryLabel,
+    this.onSecondary,
+  });
+
+  final String title;
+  final Widget content;
+  final String primaryLabel;
+  final VoidCallback onPrimary;
+  final Color primaryColor;
+  final Color primaryForegroundColor;
+  final Color? primaryBorderColor;
+  final String? secondaryLabel;
+  final VoidCallback? onSecondary;
+
+  static const Color primaryGreen = Color(0xFF1B8354);
+  static const Color dangerRed = Color(0xFFDC2626);
+  static const Color warningAmber = Color(0xFFB45309);
+
+  @override
+  Widget build(BuildContext context) {
+    final primaryButton = FilledButton(
+      onPressed: onPrimary,
+      style: FilledButton.styleFrom(
+        backgroundColor: primaryColor,
+        foregroundColor: primaryForegroundColor,
+        elevation: 0,
+        minimumSize: const Size(0, 46),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: primaryBorderColor == null
+              ? BorderSide.none
+              : BorderSide(color: primaryBorderColor!),
+        ),
+      ),
+      child: Text(
+        primaryLabel,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+      ),
+    );
+
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, 14, 24, 20),
+      actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF0F172A),
+          letterSpacing: -0.3,
+        ),
+      ),
+      content: SizedBox(width: double.maxFinite, child: content),
+      actions: [
+        if (secondaryLabel != null)
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onSecondary ?? () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF475569),
+                    backgroundColor: const Color(0xFFF8FAFC),
+                    side: const BorderSide(color: Color(0xFFE2E8F0)),
+                    elevation: 0,
+                    minimumSize: const Size(0, 46),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    secondaryLabel!,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: primaryButton),
+            ],
+          )
+        else
+          SizedBox(width: double.infinity, child: primaryButton),
+      ],
+    );
+  }
+}
+
+class ConfirmActionDialog {
+  const ConfirmActionDialog._();
+
+  static Future<bool> show(
+    BuildContext context, {
+    required String title,
+    required String message,
+    String cancelLabel = 'Cancel',
+    required String confirmLabel,
+    Color confirmColor = AppModalDialog.primaryGreen,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AppModalDialog(
+        title: title,
+        content: Text(
+          message,
+          style: const TextStyle(
+            fontSize: 13.5,
+            height: 1.45,
+            color: Color(0xFF475569),
+          ),
+        ),
+        secondaryLabel: cancelLabel,
+        onSecondary: () => Navigator.pop(dialogContext, false),
+        primaryLabel: confirmLabel,
+        primaryColor: confirmColor,
+        onPrimary: () => Navigator.pop(dialogContext, true),
+      ),
+    );
+    return result == true;
+  }
+}
+
 class PromptInputDialog extends StatefulWidget {
   const PromptInputDialog({
     super.key,
@@ -137,13 +282,10 @@ class PromptInputDialog extends StatefulWidget {
     this.autofocus = false,
     this.textCapitalization = TextCapitalization.none,
     this.confirmOutlined = false,
-    this.icon,
     this.accentColor,
-    this.accentBackgroundColor,
     this.confirmBackgroundColor,
     this.confirmForegroundColor,
     this.confirmBorderColor,
-    this.showConfirmIcon = false,
   });
 
   final String title;
@@ -157,13 +299,10 @@ class PromptInputDialog extends StatefulWidget {
   final bool autofocus;
   final TextCapitalization textCapitalization;
   final bool confirmOutlined;
-  final IconData? icon;
   final Color? accentColor;
-  final Color? accentBackgroundColor;
   final Color? confirmBackgroundColor;
   final Color? confirmForegroundColor;
   final Color? confirmBorderColor;
-  final bool showConfirmIcon;
 
   @override
   State<PromptInputDialog> createState() => _PromptInputDialogState();
@@ -186,180 +325,85 @@ class _PromptInputDialogState extends State<PromptInputDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final accentColor = widget.accentColor ?? const Color(0xFF1B8354);
-    final accentBg = widget.accentBackgroundColor ?? const Color(0xFFECFDF5);
+    final accentColor = widget.accentColor ?? AppModalDialog.primaryGreen;
     final confirmFg = widget.confirmForegroundColor ??
         (widget.confirmOutlined ? accentColor : Colors.white);
     final confirmBg = widget.confirmBackgroundColor ??
-        (widget.confirmOutlined ? accentBg : accentColor);
+        (widget.confirmOutlined ? const Color(0xFFECFDF5) : accentColor);
     final confirmBorder = widget.confirmBorderColor ??
         (widget.confirmOutlined
             ? accentColor.withValues(alpha: 0.3)
-            : Colors.transparent);
+            : null);
 
-    return AlertDialog(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.transparent,
-      elevation: 0,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: const BorderSide(color: Color(0xFFE2E8F0)),
-      ),
-      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-      contentPadding: const EdgeInsets.fromLTRB(24, 14, 24, 20),
-      actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-      title: Row(
+    return AppModalDialog(
+      title: widget.title,
+      secondaryLabel: 'Cancel',
+      onSecondary: () => Navigator.pop(context),
+      primaryLabel: widget.confirmLabel,
+      primaryColor: confirmBg,
+      primaryForegroundColor: confirmFg,
+      primaryBorderColor: confirmBorder,
+      onPrimary: () => Navigator.pop(context, _controller.text),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (widget.icon != null) ...[
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: accentBg,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(widget.icon, color: accentColor, size: 21),
-            ),
-            const SizedBox(width: 12),
-          ],
-          Expanded(
-            child: Text(
-              widget.title,
+          if (widget.subtitle != null) ...[
+            Text(
+              widget.subtitle!,
               style: const TextStyle(
-                fontSize: 19,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF0F172A),
-                letterSpacing: -0.3,
+                fontSize: 13.5,
+                height: 1.45,
+                color: Color(0xFF475569),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          TextField(
+            controller: _controller,
+            autofocus: widget.autofocus,
+            minLines: widget.minLines,
+            maxLines: widget.maxLines,
+            textCapitalization: widget.textCapitalization,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.45,
+              color: Color(0xFF0F172A),
+            ),
+            decoration: InputDecoration(
+              labelText: widget.labelText,
+              labelStyle: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF64748B),
+              ),
+              hintText: widget.hintText,
+              hintStyle: const TextStyle(
+                fontSize: 13.5,
+                color: Color(0xFF94A3B8),
+              ),
+              filled: true,
+              fillColor: const Color(0xFFF8FAFC),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 14,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: accentColor, width: 1.5),
               ),
             ),
           ),
         ],
       ),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (widget.subtitle != null) ...[
-              Text(
-                widget.subtitle!,
-                style: const TextStyle(
-                  fontSize: 13.5,
-                  height: 1.45,
-                  color: Color(0xFF475569),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-            TextField(
-              controller: _controller,
-              autofocus: widget.autofocus,
-              minLines: widget.minLines,
-              maxLines: widget.maxLines,
-              textCapitalization: widget.textCapitalization,
-              style: const TextStyle(
-                fontSize: 14,
-                height: 1.45,
-                color: Color(0xFF0F172A),
-              ),
-              decoration: InputDecoration(
-                labelText: widget.labelText,
-                labelStyle: const TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF64748B),
-                ),
-                hintText: widget.hintText,
-                hintStyle: const TextStyle(
-                  fontSize: 13.5,
-                  color: Color(0xFF94A3B8),
-                ),
-                filled: true,
-                fillColor: const Color(0xFFF8FAFC),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 14,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(color: accentColor, width: 1.5),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () => Navigator.pop(context),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF475569),
-                  backgroundColor: const Color(0xFFF8FAFC),
-                  side: const BorderSide(color: Color(0xFFE2E8F0)),
-                  elevation: 0,
-                  minimumSize: const Size(0, 46),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'Cancel',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: FilledButton(
-                onPressed: () => Navigator.pop(context, _controller.text),
-                style: FilledButton.styleFrom(
-                  backgroundColor: confirmBg,
-                  foregroundColor: confirmFg,
-                  elevation: 0,
-                  minimumSize: const Size(0, 46),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: confirmBorder),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (widget.showConfirmIcon && widget.icon != null) ...[
-                      Icon(widget.icon, size: 17),
-                      const SizedBox(width: 6),
-                    ],
-                    Flexible(
-                      child: Text(
-                        widget.confirmLabel,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 }

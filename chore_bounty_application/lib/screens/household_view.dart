@@ -244,29 +244,14 @@ class HouseholdView extends StatelessWidget {
     Household household,
     HouseholdMember member,
   ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Remove ${member.name}?'),
-        content: Text(
-          '${member.name} will be removed from ${household.name}.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFDC2626),
-            ),
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
+    final confirmed = await ConfirmActionDialog.show(
+      context,
+      title: 'Remove ${member.name}?',
+      message: '${member.name} will be removed from ${household.name}.',
+      confirmLabel: 'Remove',
+      confirmColor: AppModalDialog.dangerRed,
     );
-    if (confirmed == true && onRemoveMember != null) {
+    if (confirmed && onRemoveMember != null) {
       await onRemoveMember!(household, member);
     }
   }
@@ -276,84 +261,15 @@ class HouseholdView extends StatelessWidget {
     Household household,
     HouseholdMember member,
   ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-          side: const BorderSide(color: Color(0xFFE2E8F0)),
-        ),
-        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-        contentPadding: const EdgeInsets.fromLTRB(24, 14, 24, 20),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-        title: Text(
-          'Make ${member.name} owner?',
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF0F172A),
-            letterSpacing: -0.3,
-          ),
-        ),
-        content: Text(
+    final confirmed = await ConfirmActionDialog.show(
+      context,
+      title: 'Make ${member.name} owner?',
+      message:
           '${member.name} will become the owner of ${household.name}, and your role will change to member.',
-          style: const TextStyle(
-            fontSize: 13.5,
-            height: 1.45,
-            color: Color(0xFF475569),
-          ),
-        ),
-        actions: [
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(dialogContext, false),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF475569),
-                    backgroundColor: const Color(0xFFF8FAFC),
-                    side: const BorderSide(color: Color(0xFFE2E8F0)),
-                    elevation: 0,
-                    minimumSize: const Size(0, 46),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton(
-                  onPressed: () => Navigator.pop(dialogContext, true),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFB45309),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    minimumSize: const Size(0, 46),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Transfer',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+      confirmLabel: 'Transfer',
+      confirmColor: AppModalDialog.warningAmber,
     );
-    if (confirmed == true && onTransferOwnership != null) {
+    if (confirmed && onTransferOwnership != null) {
       await onTransferOwnership!(household, member);
     }
   }

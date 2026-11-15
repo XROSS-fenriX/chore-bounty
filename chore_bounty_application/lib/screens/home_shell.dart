@@ -35,6 +35,7 @@ export 'user_detail_screen.dart';
 import '../widgets/avatar/user_avatar_widget.dart';
 import '../widgets/dialogs/congratulations_dialog.dart';
 import '../widgets/dialogs/redo_requested_dialog.dart';
+import '../widgets/ui.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({
@@ -886,31 +887,16 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> handleLeaveHousehold(Household h) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Leave ${h.name}?'),
-        content: const Text(
+    final confirmed = await ConfirmActionDialog.show(
+      context,
+      title: 'Leave ${h.name}?',
+      message:
           'You will forfeit active quests and remove yourself from this household leaderboard. Are you sure?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Leave Household'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Leave Household',
+      confirmColor: AppModalDialog.dangerRed,
     );
 
-    if (confirmed == true && mounted) {
+    if (confirmed && mounted) {
       try {
         await widget.households.leave(h.id);
         if (!mounted) return;

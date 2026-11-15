@@ -494,102 +494,51 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
-        builder: (dialogContext) => Dialog(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 68,
-                  height: 68,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFDCFCE7),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.verified_rounded,
-                    color: Color(0xFF1B8354),
-                    size: 38,
-                  ),
+        builder: (dialogContext) => AppModalDialog(
+          title: 'Chore Approved!',
+          primaryLabel: 'Done',
+          primaryColor: AppModalDialog.primaryGreen,
+          onPrimary: () => Navigator.pop(dialogContext),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'You approved "${_bounty.title}" completed by $assigneeName.',
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  height: 1.45,
+                  color: Color(0xFF475569),
                 ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Chore Approved!',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F172A),
-                    letterSpacing: -0.3,
-                  ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'You approved "${_bounty.title}" completed by $assigneeName.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF475569),
-                    height: 1.4,
-                  ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFFDE68A)),
                 ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF3C7),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFFDE68A)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const BountyCoinWidget(size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        '+$tokenAmount Tokens Awarded',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFFB45309),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 22),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF1B8354),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    onPressed: () => Navigator.pop(dialogContext),
-                    child: const Text(
-                      'Done',
-                      style: TextStyle(
-                        fontSize: 15,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const BountyCoinWidget(size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      '+$tokenAmount Tokens Awarded',
+                      style: const TextStyle(
+                        fontSize: 14,
                         fontWeight: FontWeight.w800,
+                        color: Color(0xFFB45309),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       );
@@ -616,14 +565,7 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
         confirmLabel: 'Request Redo',
         minLines: 2,
         maxLines: 3,
-        confirmOutlined: true,
-        icon: Icons.replay_rounded,
-        accentColor: Color(0xFFB45309),
-        accentBackgroundColor: Color(0xFFFEF3C7),
-        confirmBackgroundColor: Color(0xFFFFFBEB),
-        confirmForegroundColor: Color(0xFFB45309),
-        confirmBorderColor: Color(0xFFFDE68A),
-        showConfirmIcon: true,
+        accentColor: AppModalDialog.warningAmber,
       ),
     );
 
@@ -687,30 +629,18 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
   }
 
   Future<void> _handleCancel() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Cancel Chore'),
-        content: Text(
-          _bounty.isTaken
-              ? 'Cancel this chore? The roommate who claimed it will be released and notified.'
-              : 'Cancel this chore?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Keep'),
-          ),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: const Color(0xFFDC2626)),
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Cancel Chore'),
-          ),
-        ],
-      ),
+    final confirmed = await ConfirmActionDialog.show(
+      context,
+      title: 'Cancel Chore',
+      message: _bounty.isTaken
+          ? 'Cancel this chore? The roommate who claimed it will be released and notified.'
+          : 'Cancel this chore?',
+      cancelLabel: 'Keep',
+      confirmLabel: 'Cancel Chore',
+      confirmColor: AppModalDialog.dangerRed,
     );
 
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     await _runAction(
       request: () => widget.service.cancel(_bounty.id),
       successMessage: 'Chore cancelled.',
@@ -718,26 +648,16 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
   }
 
   Future<void> _handleDelete() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete Chore'),
-        content: const Text('Delete this chore permanently? This cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Keep'),
-          ),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: const Color(0xFFDC2626)),
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await ConfirmActionDialog.show(
+      context,
+      title: 'Delete Chore',
+      message: 'Delete this chore permanently? This cannot be undone.',
+      cancelLabel: 'Keep',
+      confirmLabel: 'Delete',
+      confirmColor: AppModalDialog.dangerRed,
     );
 
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     await _runAction(
       request: () => widget.service.delete(_bounty.id),
       successMessage: 'Chore deleted.',

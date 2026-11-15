@@ -2065,7 +2065,7 @@ void main() {
 
   group('Request Redo modal redesign', () {
     testWidgets(
-      'displays system-aligned AlertDialog, icon badge, feedback input, Cancel and Request Redo CTA',
+      'displays system-aligned AlertDialog, feedback input, Cancel and Request Redo CTA without icon badge',
       (tester) async {
         final service = _FakeRejectBountyService();
         final submittedBounty = Bounty(
@@ -2115,12 +2115,26 @@ void main() {
             of: find.byType(AlertDialog),
             matching: find.byIcon(Icons.replay_rounded),
           ),
-          findsNWidgets(2),
+          findsNothing,
         );
         expect(
           find.descendant(
             of: find.byType(AlertDialog),
             matching: find.text('Optional note for the roommate...'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.byType(OutlinedButton),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.byType(FilledButton),
           ),
           findsOneWidget,
         );
@@ -2147,6 +2161,57 @@ void main() {
         expect(service.rejectCalls, 1);
         expect(service.lastRejectedId, '42');
         expect(service.lastRejectFeedback, 'Please tie the liner');
+      },
+    );
+
+    testWidgets(
+      'ConfirmActionDialog and notification modals share unified AlertDialog styling',
+      (tester) async {
+        bool? confirmed;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: ElevatedButton(
+                  onPressed: () async {
+                    confirmed = await ConfirmActionDialog.show(
+                      context,
+                      title: 'Delete Chore',
+                      message: 'Delete this chore permanently?',
+                      cancelLabel: 'Keep',
+                      confirmLabel: 'Delete',
+                      confirmColor: AppModalDialog.dangerRed,
+                    );
+                  },
+                  child: const Text('Open Confirm'),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.tap(find.text('Open Confirm'));
+        await tester.pumpAndSettle();
+
+        final dialog = tester.widget<AlertDialog>(find.byType(AlertDialog));
+        expect(dialog.backgroundColor, Colors.white);
+        expect(dialog.surfaceTintColor, Colors.transparent);
+        expect(dialog.elevation, 0);
+        expect(
+          dialog.shape,
+          const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(24)),
+            side: BorderSide(color: Color(0xFFE2E8F0)),
+          ),
+        );
+        expect(find.text('Delete Chore'), findsOneWidget);
+        expect(find.byType(OutlinedButton), findsOneWidget);
+        expect(find.byType(FilledButton), findsOneWidget);
+
+        await tester.tap(find.text('Delete'));
+        await tester.pumpAndSettle();
+        expect(confirmed, isTrue);
       },
     );
   });
