@@ -34,6 +34,7 @@ import 'user_detail_screen.dart';
 export 'user_detail_screen.dart';
 import '../widgets/avatar/user_avatar_widget.dart';
 import '../widgets/dialogs/congratulations_dialog.dart';
+import '../widgets/dialogs/redo_requested_dialog.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({
@@ -346,21 +347,24 @@ class _HomeShellState extends State<HomeShell> {
         .toList();
 
     final approvalsToCelebrate = <AppNotification>[];
+    final redosToNotify = <AppNotification>[];
     for (final n in filtered) {
-      if (n.eventType == 'approved' &&
-          n.isNumericId &&
-          !n.isRead &&
-          !_celebratedIds.contains(n.id)) {
-        approvalsToCelebrate.add(n);
+      if (n.isNumericId && !n.isRead && !_celebratedIds.contains(n.id)) {
+        if (n.eventType == 'approved') {
+          approvalsToCelebrate.add(n);
+        } else if (n.eventType == 'redo') {
+          redosToNotify.add(n);
+        }
       }
     }
 
     AppNotification? newestUnseen;
     if (_hasCompletedInitialNotificationLoad && notifyNew) {
       for (final n in filtered) {
-        final isCelebratedApproval =
-            approvalsToCelebrate.any((a) => a.id == n.id);
-        if (!isCelebratedApproval &&
+        final hasDedicatedModal =
+            approvalsToCelebrate.any((a) => a.id == n.id) ||
+            redosToNotify.any((r) => r.id == n.id);
+        if (!hasDedicatedModal &&
             !_seenNotificationIds.contains(n.id) &&
             !n.isRead) {
           newestUnseen ??= n;
@@ -373,8 +377,10 @@ class _HomeShellState extends State<HomeShell> {
     _hasCompletedInitialNotificationLoad = true;
     _latestNotifications = filtered;
 
-    if (approvalsToCelebrate.isNotEmpty && mounted && !_isShowingCelebration) {
-      _showApprovalsDialog(approvalsToCelebrate);
+    if ((approvalsToCelebrate.isNotEmpty || redosToNotify.isNotEmpty) &&
+        mounted &&
+        !_isShowingCelebration) {
+      _showNotificationModals(approvalsToCelebrate, redosToNotify);
     }
 
     if (newestUnseen != null && mounted && !_isTestEnvironment) {
@@ -414,9 +420,15 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
-  void _showApprovalsDialog(List<AppNotification> approvals) {
+  void _showNotificationModals(
+    List<AppNotification> approvals,
+    List<AppNotification> redos,
+  ) {
     _isShowingCelebration = true;
     for (final n in approvals) {
+      _celebratedIds.add(n.id);
+    }
+    for (final n in redos) {
       _celebratedIds.add(n.id);
     }
 
@@ -427,34 +439,63 @@ class _HomeShellState extends State<HomeShell> {
       }
 
       var openLeaderboard = false;
+      Bounty? viewRedoBounty;
       try {
-        await CongratulationsDialog.show(
-          context,
-          approvals,
-          onViewLeaderboard: () {
-            openLeaderboard = true;
-          },
-        );
+        if (approvals.isNotEmpty) {
+          await CongratulationsDialog.show(
+            context,
+            approvals,
+            onViewLeaderboard: () {
+              openLeaderboard = true;
+            },
+          );
+          await _markModalNotificationsRead(approvals);
+        }
+
+        if (redos.isNotEmpty && mounted) {
+          Bounty? matchedBounty;
+          if (redos.length == 1 && redos.first.bountyId != null) {
+            final bid = redos.first.bountyId!;
+            matchedBounty =
+                _latestBounties.where((b) => b.id == bid).firstOrNull;
+          }
+
+          await RedoRequestedDialog.show(
+            context,
+            redos,
+            onViewChore: matchedBounty == null
+                ? null
+                : () {
+                    viewRedoBounty = matchedBounty;
+                  },
+          );
+          await _markModalNotificationsRead(redos);
+        }
       } finally {
         _isShowingCelebration = false;
       }
 
-      final celebratedSet = approvals.map((n) => n.id).toSet();
-      if (mounted) {
-        setState(() {
-          _latestNotifications = _latestNotifications
-              .map((n) => celebratedSet.contains(n.id) ? n.copyWith(isRead: true) : n)
-              .toList();
-          if (openLeaderboard) {
-            tab = 2;
-          }
-        });
-      }
-
-      for (final n in approvals) {
-        await widget.bounties.markNotificationRead(n.id);
+      if (!mounted) return;
+      if (openLeaderboard) {
+        setState(() => tab = 2);
+      } else if (viewRedoBounty != null) {
+        await openDetail(viewRedoBounty!);
       }
     });
+  }
+
+  Future<void> _markModalNotificationsRead(List<AppNotification> items) async {
+    final ids = items.map((n) => n.id).toSet();
+    if (mounted) {
+      setState(() {
+        _latestNotifications = _latestNotifications
+            .map((n) => ids.contains(n.id) ? n.copyWith(isRead: true) : n)
+            .toList();
+      });
+    }
+    for (final n in items) {
+      await widget.bounties.markNotificationRead(n.id);
+    }
   }
 
   Future<void> refresh({bool showError = false}) async {

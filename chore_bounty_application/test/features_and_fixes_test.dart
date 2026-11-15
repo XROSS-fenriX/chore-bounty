@@ -28,6 +28,7 @@ import 'package:chore_bounty_application/widgets/bounty_detail/bounty_status_chi
 import 'package:chore_bounty_application/widgets/bounty_detail/bounty_proof_gallery.dart';
 import 'package:chore_bounty_application/widgets/bounty_detail/creator_action_bar.dart';
 import 'package:chore_bounty_application/widgets/dialogs/congratulations_dialog.dart';
+import 'package:chore_bounty_application/widgets/dialogs/redo_requested_dialog.dart';
 import 'package:chore_bounty_application/widgets/ui.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -2147,6 +2148,156 @@ void main() {
         expect(service.lastRejectFeedback, 'Please tie the liner');
       },
     );
+  });
+
+  group('RedoRequestedDialog & HomeShell receiving-user redo modal', () {
+    test('AppNotification extracts redoFeedback and redoChoreTitle accurately', () {
+      final withColonNote = AppNotification(
+        id: '77',
+        eventName: 'Redo Requested',
+        description:
+            'Sheldon Cooper requested a redo on "Empty trash cans": Missed corners: check behind the bin',
+        bountyTitle: 'Empty trash cans',
+        eventType: 'redo',
+        actorName: 'Sheldon Cooper',
+        createdAt: DateTime.now(),
+      );
+      expect(withColonNote.redoChoreTitle, 'Empty trash cans');
+      expect(
+        withColonNote.redoFeedback,
+        'Missed corners: check behind the bin',
+      );
+
+      final withoutNote = AppNotification(
+        id: '78',
+        eventName: 'Redo Requested',
+        description: 'Sheldon Cooper requested a redo on "Sweep kitchen".',
+        bountyTitle: 'Sweep kitchen',
+        eventType: 'redo',
+        actorName: 'Sheldon Cooper',
+        createdAt: DateTime.now(),
+      );
+      expect(withoutNote.redoChoreTitle, 'Sweep kitchen');
+      expect(withoutNote.redoFeedback, isNull);
+    });
+
+    testWidgets(
+      'HomeShell displays RedoRequestedDialog with input message for receiving user and marks it read on close',
+      (tester) async {
+        const user = AppUser(
+          id: 2,
+          name: 'Leonard Hofstadter',
+          email: 'leonard@gmail.com',
+        );
+        const household = Household(
+          id: 1,
+          name: 'Apartment 4A',
+          inviteCode: 'APT4A',
+          createdBy: 1,
+          role: 'member',
+          membersCount: 2,
+        );
+        final fakeBounties = _FakeCelebrationBountyService([
+          AppNotification(
+            id: 'derived-redo',
+            householdId: '1',
+            userId: '2',
+            actorId: '1',
+            eventName: 'Redo Requested',
+            description: 'Sheldon Cooper requested a redo on "Old task": Ignore',
+            eventType: 'redo',
+            isRead: false,
+            createdAt: DateTime.now(),
+          ),
+          AppNotification(
+            id: '77',
+            householdId: '1',
+            userId: '2',
+            bountyId: '42',
+            bountyTitle: 'Empty trash cans',
+            actorId: '1',
+            actorName: 'Sheldon Cooper',
+            eventName: 'Redo Requested',
+            description:
+                'Sheldon Cooper requested a redo on "Empty trash cans": Please wipe the lid too',
+            eventType: 'redo',
+            isRead: false,
+            createdAt: DateTime.now(),
+          ),
+        ]);
+
+        final storage = _MemoryTokenStorage();
+        final api = ApiClient(storage);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: HomeShell(
+              user: user,
+              auth: AuthService(api, storage),
+              bounties: fakeBounties,
+              households: _FakeSimpleHouseholdService([household]),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byType(RedoRequestedDialog), findsOneWidget);
+        expect(find.text('Redo Requested'), findsOneWidget);
+        expect(
+          find.text('Sheldon Cooper requested a redo on "Empty trash cans".'),
+          findsOneWidget,
+        );
+        expect(find.text('MESSAGE'), findsOneWidget);
+        expect(find.text('Please wipe the lid too'), findsOneWidget);
+
+        await tester.tap(find.text('Close'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(RedoRequestedDialog), findsNothing);
+        expect(fakeBounties.markedReadIds, ['77']);
+      },
+    );
+
+    testWidgets('RedoRequestedDialog triggers onViewChore callback', (tester) async {
+      var viewed = false;
+      final redoNotif = AppNotification(
+        id: '90',
+        bountyId: '42',
+        bountyTitle: 'Mop hallway',
+        actorName: 'Penny',
+        eventName: 'Redo Requested',
+        description: 'Penny requested a redo on "Mop hallway": Rinse corners',
+        eventType: 'redo',
+        createdAt: DateTime.now(),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: ElevatedButton(
+                onPressed: () => RedoRequestedDialog.show(
+                  context,
+                  [redoNotif],
+                  onViewChore: () => viewed = true,
+                ),
+                child: const Text('Open Redo'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Redo'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Rinse corners'), findsOneWidget);
+      await tester.tap(find.text('View Chore'));
+      await tester.pumpAndSettle();
+
+      expect(viewed, isTrue);
+      expect(find.byType(RedoRequestedDialog), findsNothing);
+    });
   });
 }
 

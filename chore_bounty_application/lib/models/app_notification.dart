@@ -10,6 +10,7 @@ class AppNotification {
     this.bountyCreatorId,
     this.bountyTitle,
     this.tokens,
+    this.feedback,
     this.userId = '',
     this.actorId,
     this.actorName,
@@ -26,6 +27,7 @@ class AppNotification {
   final String? bountyCreatorId;
   final String? bountyTitle;
   final int? tokens;
+  final String? feedback;
   final String userId;
   final String? actorId;
   final String? actorName;
@@ -38,6 +40,48 @@ class AppNotification {
   final DateTime createdAt;
 
   bool get isNumericId => int.tryParse(id) != null;
+
+  String? get redoFeedback {
+    final explicit = feedback?.trim();
+    if (explicit != null && explicit.isNotEmpty) {
+      return explicit;
+    }
+    if (eventType != 'redo') return null;
+
+    final title = bountyTitle?.trim();
+    if (title != null && title.isNotEmpty) {
+      final marker = '"$title": ';
+      final idx = description.indexOf(marker);
+      if (idx != -1) {
+        final extracted = description.substring(idx + marker.length).trim();
+        if (extracted.isNotEmpty) return extracted;
+      }
+    }
+
+    final match = RegExp(
+      r'requested a redo on ".+?":\s*(.+)$',
+      dotAll: true,
+    ).firstMatch(description);
+    final extracted = match?.group(1)?.trim();
+    return (extracted != null && extracted.isNotEmpty) ? extracted : null;
+  }
+
+  String get redoChoreTitle {
+    final title = bountyTitle?.trim();
+    if (title != null && title.isNotEmpty) return title;
+
+    final redoMatch =
+        RegExp(r'requested a redo on "([^"]+)"').firstMatch(description);
+    if (redoMatch != null && (redoMatch.group(1)?.trim().isNotEmpty ?? false)) {
+      return redoMatch.group(1)!.trim();
+    }
+
+    final quoted = RegExp(r'"([^"]+)"').firstMatch(description);
+    if (quoted != null && (quoted.group(1)?.trim().isNotEmpty ?? false)) {
+      return quoted.group(1)!.trim();
+    }
+    return 'Chore';
+  }
 
   bool isTriggeredBy(String? targetUserId, [String? targetUserName]) {
     if (actorId != null &&
@@ -98,6 +142,7 @@ class AppNotification {
       bountyCreatorId: bountyCreatorId ?? this.bountyCreatorId,
       bountyTitle: bountyTitle,
       tokens: tokens,
+      feedback: feedback,
       userId: userId,
       actorId: actorId,
       actorName: actorName,
@@ -140,6 +185,7 @@ class AppNotification {
 
     final rawBountyCreatorId =
         (bountyMap?['creator_id'] ?? j['bounty_creator_id'])?.toString().trim();
+    final rawFeedback = j['feedback']?.toString().trim();
 
     return AppNotification(
       id: (j['id'] ?? '').toString(),
@@ -151,6 +197,7 @@ class AppNotification {
       bountyTitle:
           (rawBountyTitle != null && rawBountyTitle.isNotEmpty) ? rawBountyTitle : null,
       tokens: parsedTokens,
+      feedback: (rawFeedback != null && rawFeedback.isNotEmpty) ? rawFeedback : null,
       userId: (j['user_id'] ?? '').toString(),
       actorId: j['actor_id']?.toString(),
       actorName: j['actor_name']?.toString(),
