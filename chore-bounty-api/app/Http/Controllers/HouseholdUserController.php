@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\HouseholdUserResource;
+use App\Models\BountyNotification;
 use App\Models\Household;
 use App\Models\HouseholdUser;
 use App\Models\User;
@@ -55,6 +56,18 @@ class HouseholdUserController extends Controller
                 'joined_at' => now(),
             ]
         );
+
+        if ($membership->wasRecentlyCreated) {
+            $actor = $request->user();
+            BountyNotification::dispatchHouseholdEvent(
+                householdId: (int) $household->id,
+                actor: $actor,
+                eventType: 'member_joined',
+                eventName: 'Member Joined',
+                description: "{$actor->name} joined \"{$household->name}\".",
+                category: 'Household',
+            );
+        }
 
         return (new HouseholdUserResource($membership->load('user')))
             ->response()

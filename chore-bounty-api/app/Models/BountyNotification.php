@@ -83,16 +83,18 @@ class BountyNotification extends Model
         return $query;
     }
 
-    public static function dispatchForHousehold(
-        Bounty $bounty,
+    public static function dispatchHouseholdEvent(
+        int $householdId,
         User $actor,
         string $eventType,
         string $eventName,
         string $description,
+        ?int $bountyId = null,
+        ?string $category = null,
         array $exceptUserIds = []
     ): void {
         $memberIds = HouseholdUser::query()
-            ->where('household_id', $bounty->household_id)
+            ->where('household_id', $householdId)
             ->pluck('user_id')
             ->map(fn ($id) => (int) $id)
             ->all();
@@ -109,14 +111,14 @@ class BountyNotification extends Model
         $rows = [];
         foreach ($recipientIds as $recipientId) {
             $rows[] = [
-                'household_id' => $bounty->household_id,
-                'bounty_id' => $bounty->id,
+                'household_id' => $householdId,
+                'bounty_id' => $bountyId,
                 'user_id' => $recipientId,
                 'actor_id' => $actor->id,
                 'event_type' => $eventType,
                 'event_name' => $eventName,
                 'description' => $description,
-                'category' => $bounty->category ?? 'Other',
+                'category' => $category ?? 'Other',
                 'is_read' => false,
                 'read_at' => null,
                 'created_at' => $now,
@@ -127,6 +129,26 @@ class BountyNotification extends Model
         if (! empty($rows)) {
             self::insert($rows);
         }
+    }
+
+    public static function dispatchForHousehold(
+        Bounty $bounty,
+        User $actor,
+        string $eventType,
+        string $eventName,
+        string $description,
+        array $exceptUserIds = []
+    ): void {
+        self::dispatchHouseholdEvent(
+            householdId: (int) $bounty->household_id,
+            actor: $actor,
+            eventType: $eventType,
+            eventName: $eventName,
+            description: $description,
+            bountyId: (int) $bounty->id,
+            category: $bounty->category ?? 'Other',
+            exceptUserIds: $exceptUserIds,
+        );
     }
 
     public static function dispatchToUser(

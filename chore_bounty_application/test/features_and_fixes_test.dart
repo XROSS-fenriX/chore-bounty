@@ -2334,6 +2334,144 @@ void main() {
       },
     );
   });
+
+  group('Dashboard Available Chores exclusion & household member notifications', () {
+    testWidgets(
+      'DashboardView Available Chores excludes user own posted chores and shows only other users chores',
+      (tester) async {
+        const currentUser = AppUser(
+          id: 1,
+          name: 'Sheldon Cooper',
+          email: 'sheldon@example.com',
+        );
+        const household = Household(
+          id: 10,
+          name: 'Apt 4A',
+          inviteCode: 'APT4A1',
+        );
+
+        const bounties = [
+          Bounty(
+            id: '1',
+            householdId: '10',
+            creatorId: '1',
+            creator: 'Sheldon Cooper',
+            title: 'My Own Posted Open Chore',
+            status: 'open',
+            points: 25,
+          ),
+          Bounty(
+            id: '2',
+            householdId: '10',
+            creatorId: '',
+            creator: 'sheldon cooper',
+            title: 'My Own Name Matched Chore',
+            status: 'open',
+            points: 15,
+          ),
+          Bounty(
+            id: '3',
+            householdId: '10',
+            creatorId: '2',
+            creator: 'Leonard Hofstadter',
+            title: 'Roommate Posted Available Chore',
+            status: 'open',
+            points: 30,
+          ),
+        ];
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: DashboardView(
+                user: currentUser,
+                currentHousehold: household,
+                myHouseholds: const [household],
+                memberHouseholdIds: const {'10'},
+                bounties: bounties,
+                leaderboard: const [],
+                isLoading: false,
+                onRefresh: () async {},
+                onSelectBounty: (_) {},
+                onCreateBounty: () {},
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('Roommate Posted Available Chore'), findsOneWidget);
+        expect(find.text('My Own Posted Open Chore'), findsNothing);
+        expect(find.text('My Own Name Matched Chore'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'NotificationsScreen renders member_joined and member_left cards with distinct icons',
+      (tester) async {
+        const user = AppUser(
+          id: 1,
+          name: 'Sheldon Cooper',
+          email: 'sheldon@example.com',
+        );
+        final notifications = [
+          AppNotification(
+            id: '501',
+            householdId: '10',
+            userId: '1',
+            actorId: '3',
+            actorName: 'Howard Wolowitz',
+            eventType: 'member_joined',
+            eventName: 'Member Joined',
+            description: 'Howard Wolowitz joined "Apt 4A".',
+            category: 'Household',
+            isRead: false,
+            createdAt: DateTime.now(),
+          ),
+          AppNotification(
+            id: '502',
+            householdId: '10',
+            userId: '1',
+            actorId: '4',
+            actorName: 'Raj Koothrappali',
+            eventType: 'member_left',
+            eventName: 'Member Left',
+            description: 'Raj Koothrappali left "Apt 4A".',
+            category: 'Household',
+            isRead: false,
+            createdAt: DateTime.now(),
+          ),
+        ];
+        final fakeBounties = _FakeCelebrationBountyService(notifications);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: NotificationsScreen(
+              user: user,
+              bounties: fakeBounties,
+              householdId: '10',
+              initialNotifications: notifications,
+              onSelectBounty: (_) {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Member Joined'), findsOneWidget);
+        expect(find.text('Howard Wolowitz joined "Apt 4A".'), findsOneWidget);
+        expect(find.byIcon(Icons.person_add_alt_1_rounded), findsOneWidget);
+
+        expect(find.text('Member Left'), findsOneWidget);
+        expect(find.text('Raj Koothrappali left "Apt 4A".'), findsOneWidget);
+        expect(find.byIcon(Icons.person_remove_rounded), findsOneWidget);
+
+        // Tapping a household membership notification marks it read cleanly.
+        await tester.tap(find.text('Member Joined'));
+        await tester.pumpAndSettle();
+        expect(fakeBounties.markedReadIds, ['501']);
+      },
+    );
+  });
 }
 
 class _MemoryTokenStorage extends TokenStorage {

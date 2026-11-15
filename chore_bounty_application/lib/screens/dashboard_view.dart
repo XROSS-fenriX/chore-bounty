@@ -119,8 +119,9 @@ class _DashboardViewState extends State<DashboardView> {
   List<Bounty> get _readyForApprovalChores =>
       _visibleBounties.where((b) => _isPostedByMe(b) && b.isSubmitted).toList();
 
-  List<Bounty> get _availableChores =>
-      _visibleBounties.where((b) => b.isAvailable).toList();
+  List<Bounty> get _availableChores => _visibleBounties
+      .where((b) => b.isAvailable && !_isPostedByMe(b))
+      .toList();
 
   List<Bounty> get _myChores {
     final uid = widget.user.id.toString();

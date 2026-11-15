@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\HouseholdResource;
+use App\Models\BountyNotification;
 use App\Models\Household;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -94,13 +95,23 @@ class HouseholdController extends Controller
             ], 404);
         }
 
-        $userId = $request->user()->id;
+        $user = $request->user();
+        $userId = $user->id;
 
         if (! $household->members()->where('users.id', $userId)->exists()) {
             $household->members()->attach($userId, [
                 'role' => 'member',
                 'joined_at' => now(),
             ]);
+
+            BountyNotification::dispatchHouseholdEvent(
+                householdId: (int) $household->id,
+                actor: $user,
+                eventType: 'member_joined',
+                eventName: 'Member Joined',
+                description: "{$user->name} joined \"{$household->name}\".",
+                category: 'Household',
+            );
         }
 
         return response()->json([
@@ -111,7 +122,8 @@ class HouseholdController extends Controller
 
     public function leave(Request $request, Household $household): JsonResponse
     {
-        $userId = $request->user()->id;
+        $user = $request->user();
+        $userId = $user->id;
 
         if (! $household->members()->where('users.id', $userId)->exists()) {
             return response()->json([
@@ -119,7 +131,9 @@ class HouseholdController extends Controller
             ], 422);
         }
 
-        DB::transaction(function () use ($household, $userId) {
+        $householdDeleted = false;
+
+        DB::transaction(function () use ($household, $userId, &$householdDeleted) {
             $household->releaseMemberAssignments($userId);
 
             $isOwner = $household->created_by === $userId;
@@ -135,8 +149,20 @@ class HouseholdController extends Controller
 
             if ($household->members()->count() === 0 && ! $household->bounties()->withTrashed()->exists()) {
                 $household->delete();
+                $householdDeleted = true;
             }
         });
+
+        if (! $householdDeleted) {
+            BountyNotification::dispatchHouseholdEvent(
+                householdId: (int) $household->id,
+                actor: $user,
+                eventType: 'member_left',
+                eventName: 'Member Left',
+                description: "{$user->name} left \"{$household->name}\".",
+                category: 'Household',
+            );
+        }
 
         return response()->json([
             'message' => 'Successfully left the household.',

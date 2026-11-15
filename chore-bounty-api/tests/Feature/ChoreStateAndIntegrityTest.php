@@ -264,6 +264,48 @@ class ChoreStateAndIntegrityTest extends TestCase
         $this->assertDatabaseHas('households', ['id' => $household->id]);
     }
 
+    public function test_household_join_and_leave_dispatch_notifications_to_active_members(): void
+    {
+        [$creator, $member, , $household] = $this->seedHousehold();
+        $newcomer = User::factory()->create(['first_name' => 'Howard', 'last_name' => 'Wolowitz']);
+
+        Sanctum::actingAs($newcomer);
+        $this->postJson('/api/households/join', [
+            'invite_code' => $household->invite_code,
+        ])->assertStatus(200);
+
+        // Newcomer does not receive their own join notification
+        $newcomerNotifs = $this->getJson("/api/notifications?household_id={$household->id}")
+            ->assertStatus(200)
+            ->json('data');
+        $this->assertNull(collect($newcomerNotifs)->firstWhere('event_type', 'member_joined'));
+
+        // Existing member receives member_joined notification
+        Sanctum::actingAs($member);
+        $memberNotifs = $this->getJson("/api/notifications?household_id={$household->id}")
+            ->assertStatus(200)
+            ->json('data');
+        $joined = collect($memberNotifs)->firstWhere('event_type', 'member_joined');
+        $this->assertNotNull($joined);
+        $this->assertSame('Member Joined', $joined['event_name']);
+        $this->assertStringContainsString('Howard Wolowitz joined "Apt 4A"', $joined['description']);
+        $this->assertNull($joined['bounty_id']);
+
+        // Newcomer leaves -> creator & remaining members receive member_left notification
+        Sanctum::actingAs($newcomer);
+        $this->postJson("/api/households/{$household->id}/leave")->assertStatus(200);
+
+        Sanctum::actingAs($creator);
+        $creatorNotifs = $this->getJson("/api/notifications?household_id={$household->id}")
+            ->assertStatus(200)
+            ->json('data');
+        $left = collect($creatorNotifs)->firstWhere('event_type', 'member_left');
+        $this->assertNotNull($left);
+        $this->assertSame('Member Left', $left['event_name']);
+        $this->assertStringContainsString('Howard Wolowitz left "Apt 4A"', $left['description']);
+        $this->assertNull($left['bounty_id']);
+    }
+
     public function test_leaderboard_ties_share_rank_and_bogus_period_falls_back_to_all(): void
     {
         [$creator, $member, $observer, $household] = $this->seedHousehold();

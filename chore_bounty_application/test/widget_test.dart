@@ -2414,6 +2414,7 @@ void main() {
       status: 'submitted',
       submissionProof: 'Mopped quickly',
       claimedAt: DateTime.now().subtract(const Duration(hours: 2)),
+      submittedAt: DateTime.now(),
     );
 
     final bountyService = _FakeHomeBountyService(

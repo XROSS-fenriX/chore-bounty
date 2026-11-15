@@ -244,9 +244,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Color _circleBgForCategory(String category, String eventType) {
     switch (eventType) {
       case 'cancelled':
+      case 'member_left':
         return const Color(0xFFFEF2F2);
       case 'approved':
       case 'awarded':
+      case 'member_joined':
         return const Color(0xFFDCFCE7);
       case 'redo':
         return const Color(0xFFFFF7ED);
@@ -403,6 +405,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
+  Widget _buildLeadingIcon(AppNotification item) {
+    switch (item.eventType) {
+      case 'member_joined':
+        return const Icon(
+          Icons.person_add_alt_1_rounded,
+          color: Color(0xFF15803D),
+          size: 24,
+        );
+      case 'member_left':
+        return const Icon(
+          Icons.person_remove_rounded,
+          color: Color(0xFFDC2626),
+          size: 24,
+        );
+      default:
+        return CategoryIconWidget(
+          category: item.category,
+          size: 28,
+        );
+    }
+  }
+
   Widget _buildNotificationCard(AppNotification item) {
     final isUnread = !item.isRead;
     final circleBg = _circleBgForCategory(item.category, item.eventType);
@@ -447,10 +471,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ),
                   ),
                   alignment: Alignment.center,
-                  child: CategoryIconWidget(
-                    category: item.category,
-                    size: 28,
-                  ),
+                  child: _buildLeadingIcon(item),
                 ),
                 const SizedBox(width: 14),
 
