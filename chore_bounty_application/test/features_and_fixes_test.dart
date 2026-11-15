@@ -9,6 +9,8 @@ import 'package:chore_bounty_application/models/leaderboard_entry.dart';
 import 'package:chore_bounty_application/screens/auth_gate.dart';
 import 'package:chore_bounty_application/screens/home_shell.dart';
 import 'package:chore_bounty_application/screens/welcome_screen.dart';
+import 'package:chore_bounty_application/widgets/dashboard/dashboard_filter_pills.dart';
+import 'package:chore_bounty_application/widgets/leaderboard/leaderboard_podium.dart';
 import 'package:chore_bounty_application/services/auth_service.dart';
 import 'package:chore_bounty_application/services/bounty_service.dart';
 import 'package:chore_bounty_application/services/household_service.dart';
@@ -438,9 +440,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Apartment 4A · 3 members'), findsOneWidget);
-      expect(find.text('–'), findsOneWidget);
+      expect(find.byType(DashboardFilterPills), findsOneWidget);
+      expect(find.byType(LeaderboardPodiumSection), findsOneWidget);
+      expect(find.text('–'), findsNWidgets(2));
       expect(find.text('You'), findsOneWidget);
-      expect(find.text('You are 2nd · 100 tokens behind Sheldon'), findsOneWidget);
+      expect(find.textContaining('behind'), findsNothing);
+      expect(find.textContaining('%'), findsNothing);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
       expect(find.text('TOKENS EARNED'), findsOneWidget);
       expect(find.text('200'), findsOneWidget);
       expect(find.byIcon(Icons.emoji_events_rounded), findsNothing);
@@ -449,7 +455,7 @@ void main() {
       final ownMaterial = tester
           .widgetList<Material>(find.byType(Material))
           .where((m) => m.color == const Color(0xFFF0FDF4));
-      expect(ownMaterial.length, 1);
+      expect(ownMaterial.length, 2);
 
       await tester.tap(find.text('Week'));
       await tester.pumpAndSettle();

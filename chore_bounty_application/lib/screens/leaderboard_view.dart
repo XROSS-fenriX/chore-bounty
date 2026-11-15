@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../models/app_user.dart';
 import '../models/household.dart';
 import '../models/leaderboard_entry.dart';
+import '../widgets/dashboard/dashboard_filter_pills.dart';
+import '../widgets/leaderboard/leaderboard_podium.dart';
 import '../widgets/leaderboard/leaderboard_row.dart';
 import '../widgets/leaderboard/leaderboard_summary_card.dart';
 import '../widgets/ui.dart';
@@ -38,11 +40,19 @@ class LeaderboardView extends StatefulWidget {
 }
 
 class _LeaderboardViewState extends State<LeaderboardView> {
-  static const _periods = <({String key, String label})>[
-    (key: 'week', label: 'Week'),
-    (key: 'month', label: 'Month'),
-    (key: 'all', label: 'All time'),
-  ];
+  static const _periodKeyToLabel = <String, String>{
+    'week': 'Week',
+    'month': 'Month',
+    'all': 'All time',
+  };
+
+  static const _periodLabelToKey = <String, String>{
+    'Week': 'week',
+    'Month': 'month',
+    'All time': 'all',
+  };
+
+  static const _periodLabels = ['Week', 'Month', 'All time'];
 
   late String _selectedPeriod;
 
@@ -60,8 +70,9 @@ class _LeaderboardViewState extends State<LeaderboardView> {
     }
   }
 
-  void _selectPeriod(String key) {
-    if (_selectedPeriod == key) return;
+  void _onFilterLabelSelected(String label) {
+    final key = _periodLabelToKey[label];
+    if (key == null || _selectedPeriod == key) return;
     setState(() => _selectedPeriod = key);
     widget.onPeriodChanged?.call(key);
   }
@@ -70,11 +81,11 @@ class _LeaderboardViewState extends State<LeaderboardView> {
   Widget build(BuildContext context) {
     final household = widget.currentHousehold;
     final entries = widget.leaderboard;
+    final podiumEntries = entries.take(3).toList();
     final memberCount = household != null
         ? (household.membersCount > 0 ? household.membersCount : entries.length)
         : entries.length;
-    final totalHouseholdTokens =
-        entries.fold<int>(0, (sum, e) => sum + e.totalTokens);
+    final selectedLabel = _periodKeyToLabel[_selectedPeriod] ?? 'All time';
 
     return Scaffold(
       backgroundColor: const Color(0xFFFAF8F4),
@@ -104,12 +115,12 @@ class _LeaderboardViewState extends State<LeaderboardView> {
                       ),
                       const SizedBox(height: 12),
                     ],
-                    _PeriodSegmentedControl(
-                      periods: _periods,
-                      selectedKey: _selectedPeriod,
-                      onChanged: _selectPeriod,
+                    DashboardFilterPills(
+                      filters: _periodLabels,
+                      selectedFilter: selectedLabel,
+                      onFilterChanged: _onFilterLabelSelected,
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
                     if (widget.isLoading && entries.isEmpty)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 48),
@@ -132,11 +143,14 @@ class _LeaderboardViewState extends State<LeaderboardView> {
                         message: 'No household members on the leaderboard yet.',
                       )
                     else ...[
-                      LeaderboardSummaryCard(
-                        entries: entries,
-                        currentUser: widget.currentUser,
-                      ),
+                      LeaderboardSummaryCard(entries: entries),
                       const SizedBox(height: 18),
+                      LeaderboardPodiumSection(
+                        entries: podiumEntries,
+                        currentUserId: widget.currentUser?.id,
+                        onUserTap: widget.onUserTap,
+                      ),
+                      const SizedBox(height: 20),
                       const Padding(
                         padding: EdgeInsets.only(left: 4, bottom: 8),
                         child: Text(
@@ -166,7 +180,6 @@ class _LeaderboardViewState extends State<LeaderboardView> {
                                 ),
                               LeaderboardRow(
                                 entry: entries[i],
-                                totalHouseholdTokens: totalHouseholdTokens,
                                 isCurrentUser: widget.currentUser != null &&
                                     entries[i].userId == widget.currentUser!.id,
                                 onTap: () => widget.onUserTap(entries[i]),
@@ -182,67 +195,6 @@ class _LeaderboardViewState extends State<LeaderboardView> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _PeriodSegmentedControl extends StatelessWidget {
-  const _PeriodSegmentedControl({
-    required this.periods,
-    required this.selectedKey,
-    required this.onChanged,
-  });
-
-  final List<({String key, String label})> periods;
-  final String selectedKey;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: periods.map((item) {
-          final isSelected = item.key == selectedKey;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => onChanged(item.key),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: isSelected ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(9),
-                  boxShadow: isSelected
-                      ? const [
-                          BoxShadow(
-                            color: Color(0x0F0F172A),
-                            blurRadius: 4,
-                            offset: Offset(0, 1),
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Text(
-                  item.label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                    color: isSelected
-                        ? const Color(0xFF0F172A)
-                        : const Color(0xFF64748B),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
       ),
     );
   }

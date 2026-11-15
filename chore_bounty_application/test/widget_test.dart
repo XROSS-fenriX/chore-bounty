@@ -1907,9 +1907,20 @@ void main() {
     expect(find.text('My Badges'), findsNothing);
     expect(find.text('First Clean'), findsNothing);
     expect(find.text('370'), findsOneWidget);
-    expect(find.text('You are 2nd · 80 tokens behind Sheldon'), findsOneWidget);
+    expect(find.textContaining('behind Sheldon'), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
 
-    // 2. Flat ranking list shows numeric ranks and dash for 0 tokens
+    // 2. Crown-free podium renders Top 3 with 1st higher than 2nd, 2nd higher than 3rd
+    expect(find.text('1st'), findsOneWidget);
+    expect(find.text('2nd'), findsOneWidget);
+    expect(find.text('3rd'), findsOneWidget);
+    final sheldonPodiumY = tester.getTopLeft(find.text('Sheldon')).dy;
+    final leonardPodiumY = tester.getTopLeft(find.text('Leonard')).dy;
+    final howardPodiumY = tester.getTopLeft(find.text('Howard')).dy;
+    expect(sheldonPodiumY, lessThan(leonardPodiumY));
+    expect(leonardPodiumY, lessThan(howardPodiumY));
+
+    // 3. Flat ranking list shows numeric ranks and dash for 0 tokens
     expect(find.text('1'), findsWidgets);
     expect(find.text('2'), findsWidgets);
     expect(find.text('3'), findsWidgets);
@@ -1917,7 +1928,7 @@ void main() {
     expect(find.text('You'), findsOneWidget);
     expect(find.text('Leonard Hofstadter'), findsOneWidget);
 
-    // 3. Sorted top-to-bottom vertically (no podium)
+    // 4. Sorted top-to-bottom vertically in ranking list
     final sheldonY = tester.getTopLeft(find.text('Sheldon Cooper')).dy;
     final leonardY = tester.getTopLeft(find.text('Leonard Hofstadter')).dy;
     final howardY = tester.getTopLeft(find.text('Howard Wolowitz')).dy;
