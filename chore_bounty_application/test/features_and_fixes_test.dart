@@ -2472,6 +2472,122 @@ void main() {
       },
     );
   });
+
+  group('HouseholdPage transfer ownership and leave household', () {
+    testWidgets(
+      'owner can transfer ownership to another member via picker or row action, and users can leave from HouseholdView',
+      (tester) async {
+        const ownerUser = AppUser(
+          id: 1,
+          name: 'Sheldon Cooper',
+          email: 'sheldon@example.com',
+        );
+        const regularUser = AppUser(
+          id: 2,
+          name: 'Leonard Hofstadter',
+          email: 'leonard@example.com',
+        );
+        const householdAsOwner = Household(
+          id: 10,
+          name: 'Apt 4A',
+          inviteCode: 'APT4A1',
+          createdBy: 1,
+          role: 'owner',
+          membersCount: 2,
+        );
+        const householdAsMember = Household(
+          id: 10,
+          name: 'Apt 4A',
+          inviteCode: 'APT4A1',
+          createdBy: 1,
+          role: 'member',
+          membersCount: 2,
+        );
+        const members = [
+          HouseholdMember(
+            userId: 1,
+            name: 'Sheldon Cooper',
+            email: 'sheldon@example.com',
+            role: 'owner',
+          ),
+          HouseholdMember(
+            userId: 2,
+            name: 'Leonard Hofstadter',
+            email: 'leonard@example.com',
+            role: 'member',
+          ),
+        ];
+
+        HouseholdMember? transferredTo;
+        Household? leftHousehold;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: HouseholdView(
+                currentUser: ownerUser,
+                currentHousehold: householdAsOwner,
+                members: members,
+                isLoading: false,
+                onRefresh: () async {},
+                onTransferOwnership: (_, member) async =>
+                    transferredTo = member,
+                onLeaveHousehold: (h) async => leftHousehold = h,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Transfer Ownership'), findsOneWidget);
+        expect(find.byTooltip('Transfer ownership'), findsOneWidget);
+        expect(find.text('Leave Household'), findsOneWidget);
+
+        // Owner picks member via Transfer Ownership button and confirms.
+        await tester.ensureVisible(find.text('Transfer Ownership'));
+        await tester.tap(find.text('Transfer Ownership'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Select a roommate to become the new owner of Apt 4A.'), findsOneWidget);
+        await tester.tap(find.text('Leonard Hofstadter').last);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Make Leonard Hofstadter owner?'), findsOneWidget);
+        await tester.tap(find.text('Transfer'));
+        await tester.pumpAndSettle();
+
+        expect(transferredTo?.userId, 2);
+
+        // User taps Leave Household from Household page.
+        await tester.ensureVisible(find.text('Leave Household'));
+        await tester.tap(find.text('Leave Household'));
+        await tester.pumpAndSettle();
+        expect(leftHousehold?.id, 10);
+
+        // Non-owner member sees Leave Household but not Transfer Ownership.
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: HouseholdView(
+                currentUser: regularUser,
+                currentHousehold: householdAsMember,
+                members: members,
+                isLoading: false,
+                onRefresh: () async {},
+                onTransferOwnership: (_, _) async {},
+                onLeaveHousehold: (_) async {},
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Transfer Ownership'), findsNothing);
+        expect(find.byTooltip('Transfer ownership'), findsNothing);
+        expect(find.text('Leave Household'), findsOneWidget);
+      },
+    );
+  });
 }
 
 class _MemoryTokenStorage extends TokenStorage {

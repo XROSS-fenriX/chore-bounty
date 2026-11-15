@@ -673,6 +673,41 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
+  Future<void> handleTransferOwnership(
+    Household h,
+    HouseholdMember member,
+  ) async {
+    try {
+      final updated = await widget.households.transferOwnership(
+        h.id,
+        member.userId,
+      );
+      if (!mounted) return;
+      setState(() {
+        myHouseholds = myHouseholds
+            .map((item) => item.id == h.id ? updated : item)
+            .toList();
+        if (currentHousehold?.id == h.id) {
+          currentHousehold = updated;
+        }
+      });
+      await refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Transferred ownership to ${member.name}'),
+          backgroundColor: primaryGreen,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.households.error(e))),
+      );
+    }
+  }
+
   Future<void> handleRemoveMember(
     Household h,
     HouseholdMember member,
@@ -1432,6 +1467,8 @@ class _HomeShellState extends State<HomeShell> {
           ),
           onRenameHousehold: handleRenameHousehold,
           onRemoveMember: handleRemoveMember,
+          onTransferOwnership: handleTransferOwnership,
+          onLeaveHousehold: handleLeaveHousehold,
         );
       },
     );

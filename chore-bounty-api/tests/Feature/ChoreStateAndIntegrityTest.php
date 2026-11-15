@@ -306,6 +306,58 @@ class ChoreStateAndIntegrityTest extends TestCase
         $this->assertNull($left['bounty_id']);
     }
 
+    public function test_owner_can_transfer_ownership_and_old_owner_loses_owner_permissions(): void
+    {
+        [$creator, $member, $observer, $household] = $this->seedHousehold();
+        $outsider = User::factory()->create(['first_name' => 'Raj', 'last_name' => 'Koothrappali']);
+
+        // Non-owner cannot transfer ownership
+        Sanctum::actingAs($observer);
+        $this->postJson("/api/households/{$household->id}/transfer-ownership", [
+            'user_id' => $member->id,
+        ])->assertStatus(403);
+
+        Sanctum::actingAs($creator);
+        // Self-transfer or outsider target is rejected with 422
+        $this->postJson("/api/households/{$household->id}/transfer-ownership", [
+            'user_id' => $creator->id,
+        ])->assertStatus(422);
+        $this->postJson("/api/households/{$household->id}/transfer-ownership", [
+            'user_id' => $outsider->id,
+        ])->assertStatus(422);
+
+        // Valid transfer from creator to member
+        $res = $this->postJson("/api/households/{$household->id}/transfer-ownership", [
+            'user_id' => $member->id,
+        ])->assertStatus(200);
+
+        $this->assertSame($member->id, $res->json('data.created_by'));
+        $this->assertSame('member', $res->json('data.role'));
+        $this->assertSame($member->id, $household->fresh()->created_by);
+        $this->assertDatabaseHas('household_user', [
+            'household_id' => $household->id,
+            'user_id' => $member->id,
+            'role' => 'owner',
+        ]);
+        $this->assertDatabaseHas('household_user', [
+            'household_id' => $household->id,
+            'user_id' => $creator->id,
+            'role' => 'member',
+        ]);
+
+        // Old owner can no longer transfer ownership or rename
+        $this->postJson("/api/households/{$household->id}/transfer-ownership", [
+            'user_id' => $observer->id,
+        ])->assertStatus(403);
+        $this->putJson("/api/households/{$household->id}", ['name' => 'Nope'])
+            ->assertStatus(403);
+
+        // New owner can rename
+        Sanctum::actingAs($member);
+        $this->putJson("/api/households/{$household->id}", ['name' => 'Apt 4B'])
+            ->assertStatus(200);
+    }
+
     public function test_leaderboard_ties_share_rank_and_bogus_period_falls_back_to_all(): void
     {
         [$creator, $member, $observer, $household] = $this->seedHousehold();

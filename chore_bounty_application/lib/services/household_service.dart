@@ -55,6 +55,15 @@ class HouseholdService {
     await api.dio.delete('/households/$householdId/members/$userId');
   }
 
+  Future<Household> transferOwnership(int householdId, int userId) async {
+    final res = await api.dio.post(
+      '/households/$householdId/transfer-ownership',
+      data: {'user_id': userId},
+    );
+    final data = res.data is Map ? (res.data['data'] ?? res.data) : {};
+    return Household.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
   Future<Household> update(int householdId, String name) async {
     final res = await api.dio.put('/households/$householdId', data: {
       'name': name,

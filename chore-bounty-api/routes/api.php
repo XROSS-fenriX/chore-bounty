@@ -41,6 +41,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Household Management & Leaderboard
     Route::post('households/join', [HouseholdController::class, 'joinByCode'])->middleware('throttle:15,1');
     Route::post('households/{household}/leave', [HouseholdController::class, 'leave']);
+    Route::post('households/{household}/transfer-ownership', [HouseholdController::class, 'transferOwnership']);
     Route::apiResource('households', HouseholdController::class);
     Route::get('households/{household}/leaderboard', [LeaderboardController::class, 'index']);
     Route::get('leaderboard', [LeaderboardController::class, 'current']);

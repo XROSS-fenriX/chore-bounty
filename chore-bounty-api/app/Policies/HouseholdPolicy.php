@@ -42,5 +42,21 @@ class HouseholdPolicy
             ? Response::allow()
             : Response::deny('Only the household creator can delete this household.');
     }
+
+    public function transferOwnership(User $actor, Household $household): Response
+    {
+        if ($household->created_by === $actor->id) {
+            return Response::allow();
+        }
+
+        $isOwner = $household->memberships()
+            ->where('user_id', $actor->id)
+            ->where('role', 'owner')
+            ->exists();
+
+        return $isOwner
+            ? Response::allow()
+            : Response::deny('Only the household owner can transfer ownership.');
+    }
 }
 

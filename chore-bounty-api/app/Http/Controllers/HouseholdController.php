@@ -168,4 +168,59 @@ class HouseholdController extends Controller
             'message' => 'Successfully left the household.',
         ]);
     }
+
+    public function transferOwnership(Request $request, Household $household): JsonResponse
+    {
+        Gate::authorize('transferOwnership', $household);
+
+        $validated = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+        ]);
+
+        $actor = $request->user();
+        $newOwnerId = (int) $validated['user_id'];
+
+        abort_if(
+            $newOwnerId === (int) $actor->id,
+            422,
+            'You are already the owner of this household.'
+        );
+
+        $isMember = $household->memberships()
+            ->where('user_id', $newOwnerId)
+            ->exists();
+
+        abort_unless(
+            $isMember,
+            422,
+            'Selected user is not a member of this household.'
+        );
+
+        DB::transaction(function () use ($household, $actor, $newOwnerId) {
+            $lockedHousehold = Household::whereKey($household->id)->lockForUpdate()->firstOrFail();
+
+            $lockedHousehold->memberships()
+                ->where('role', 'owner')
+                ->update(['role' => 'member']);
+
+            $lockedHousehold->memberships()
+                ->where('user_id', $actor->id)
+                ->update(['role' => 'member']);
+
+            $lockedHousehold->memberships()
+                ->where('user_id', $newOwnerId)
+                ->update(['role' => 'owner']);
+
+            $lockedHousehold->update(['created_by' => $newOwnerId]);
+        });
+
+        $fresh = $household->fresh()
+            ->load(['creator', 'members'])
+            ->loadCount(['members', 'bounties']);
+
+        return response()->json([
+            'message' => 'Ownership transferred successfully.',
+            'data' => new HouseholdResource($fresh),
+        ]);
+    }
 }
