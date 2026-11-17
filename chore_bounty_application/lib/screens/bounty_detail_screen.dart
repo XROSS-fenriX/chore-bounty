@@ -416,6 +416,14 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
   }
 
   Future<void> _handleSubmit() async {
+    if (!_bounty.canSubmit) {
+      setState(() {
+        _errorMessage =
+            'This chore is past its due date and can no longer be submitted.';
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -747,8 +755,8 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
                       ),
                       const SizedBox(height: 12),
 
-                      // SUBMISSION INPUT SECTION (active claim by current user)
-                      if (_bounty.isClaimed && _isAssignee) ...[
+                      // SUBMISSION INPUT SECTION (active submittable claim by current user)
+                      if (_bounty.canSubmit && _isAssignee) ...[
                         BountyProofInputCard(
                           controller: _proofController,
                           imagePaths: _selectedProofImages,
@@ -823,29 +831,38 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
       );
     }
 
-    // 3. Claimed chore - assignee -> "Submit for Review" + "Abandon Quest"
+    // 3. Claimed chore - assignee -> "Submit for Review" (if not past due) + "Abandon Quest"
     if (_bounty.isClaimed && _isAssignee) {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryGreen,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          if (_bounty.canSubmit)
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryGreen,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                onPressed: _handleSubmit,
+                icon: const Icon(Icons.send_rounded, size: 20),
+                label: const Text(
+                  'Submit for Review',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                ),
               ),
-              onPressed: _handleSubmit,
-              icon: const Icon(Icons.send_rounded, size: 20),
-              label: const Text(
-                'Submit for Review',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-              ),
+            )
+          else
+            _buildStatusBanner(
+              label: 'Past Due',
+              icon: Icons.event_busy_rounded,
+              bgColor: const Color(0xFFFFF7ED),
+              fgColor: const Color(0xFFC2410C),
+              borderColor: const Color(0xFFFDBA74),
             ),
-          ),
           const SizedBox(height: 8),
           TextButton(
             onPressed: _handleAbandon,

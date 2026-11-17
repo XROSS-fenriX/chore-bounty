@@ -120,6 +120,14 @@ class BountyActionController extends Controller
             DB::transaction(function () use ($user, $bounty, $proof, $storedUrls, $request) {
                 $lockedBounty = Bounty::whereKey($bounty->id)->lockForUpdate()->firstOrFail();
 
+                if (! $lockedBounty->isTaken()) {
+                    abort(422, 'This chore is no longer in a submittable state.');
+                }
+
+                if ($lockedBounty->isPastDue()) {
+                    abort(422, 'This chore is past its due date and can no longer be submitted.');
+                }
+
                 $lockedBounty->update([
                     'submission_proof' => $proof,
                     'submission_images' => ! empty($storedUrls) ? $storedUrls : null,

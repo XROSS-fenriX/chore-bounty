@@ -59,12 +59,14 @@ class Bounty {
   final bool isViewerActiveMember;
 
   bool get isOpen => status == 'open' || status == 'available';
-  bool get isPastDue =>
-      isOpen && dueAt != null && !dueAt!.isAfter(DateTime.now());
+  bool get isDeadlinePassed =>
+      dueAt != null && !dueAt!.isAfter(DateTime.now());
+  bool get isPastDue => isOpen && isDeadlinePassed;
   bool get isExpired => isPastDue;
   bool get isAvailable => isOpen && !isPastDue;
   bool get isClaimed => status == 'claimed' || status == 'in_progress';
   bool get isTaken => isClaimed;
+  bool get canSubmit => isClaimed && !isDeadlinePassed;
   bool get isSubmitted => status == 'submitted';
   bool get isAwaitingReview => isSubmitted;
   bool get isCompleted => status == 'completed';

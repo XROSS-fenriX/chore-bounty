@@ -43,6 +43,7 @@ class BountyCompletionController extends Controller
             $validated
         ) {
             $claim = BountyClaim::whereKey($bountyClaim->id)
+                ->with('bounty')
                 ->lockForUpdate()
                 ->firstOrFail();
 
@@ -50,6 +51,12 @@ class BountyCompletionController extends Controller
                 $claim->status === 'active',
                 422,
                 'Only active claims can be submitted.'
+            );
+
+            abort_if(
+                $claim->bounty?->isPastDue() ?? false,
+                422,
+                'This chore is past its due date and can no longer be submitted.'
             );
 
             if ($claim->completions()->whereIn('status', [

@@ -102,9 +102,15 @@ class BountyPolicy
         $isAssignee = ($bounty->assignee_id === $user->id) ||
                       $bounty->claims()->where('user_id', $user->id)->where('status', 'active')->exists();
 
-        return $isAssignee && in_array($bounty->status, ['claimed', 'in_progress'])
-            ? Response::allow()
-            : Response::deny('Only the active assignee can submit completion proof.');
+        if (! ($isAssignee && $bounty->isTaken())) {
+            return Response::deny('Only the active assignee can submit completion proof.');
+        }
+
+        if ($bounty->isPastDue()) {
+            return Response::deny('This chore is past its due date and can no longer be submitted.');
+        }
+
+        return Response::allow();
     }
 
     public function complete(User $user, Bounty $bounty): Response

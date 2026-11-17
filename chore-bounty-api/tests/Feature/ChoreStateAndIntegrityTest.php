@@ -614,4 +614,40 @@ class ChoreStateAndIntegrityTest extends TestCase
           ->assertJsonPath('data.submission_proof', 'Done without photos')
           ->assertJsonPath('data.submission_images', []);
     }
+
+    public function test_taken_chore_beyond_due_date_cannot_be_submitted_until_due_date_extended(): void
+    {
+        [$creator, $member, , $household] = $this->seedHousehold();
+        $bounty = $this->createBounty($household, $creator, [
+            'due_at' => now()->addHour(),
+        ]);
+
+        Sanctum::actingAs($member);
+        $this->postJson("/api/bounties/{$bounty->id}/claim")->assertStatus(200);
+        $claim = BountyClaim::where('bounty_id', $bounty->id)->where('status', 'active')->firstOrFail();
+
+        // Simulate the due date passing after the chore was taken
+        $bounty->update(['due_at' => now()->subMinute()]);
+
+        $this->postJson("/api/bounties/{$bounty->id}/submit", [
+            'submission_proof' => 'Too late',
+        ])->assertStatus(403);
+        $this->assertSame('claimed', $bounty->fresh()->status);
+
+        $this->postJson("/api/claims/{$claim->id}/completions", [
+            'submission_note' => 'Legacy too late',
+        ])->assertStatus(422);
+
+        // Extending the due date makes the taken chore submittable again
+        Sanctum::actingAs($creator);
+        $this->putJson("/api/bounties/{$bounty->id}", [
+            'due_at' => now()->addHours(2)->toIso8601String(),
+        ])->assertStatus(200);
+
+        Sanctum::actingAs($member);
+        $this->postJson("/api/bounties/{$bounty->id}/submit", [
+            'submission_proof' => 'Submitted after extension',
+        ])->assertStatus(200)
+          ->assertJsonPath('data.status', 'submitted');
+    }
 }

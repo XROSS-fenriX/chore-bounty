@@ -125,11 +125,14 @@ class Bounty extends Model
         return $this->due_at === null || $this->due_at->isFuture();
     }
 
+    public function isPastDue(): bool
+    {
+        return $this->due_at !== null && ! $this->due_at->isFuture();
+    }
+
     public function isExpired(): bool
     {
-        return $this->status === 'open'
-            && $this->due_at !== null
-            && ! $this->due_at->isFuture();
+        return $this->status === 'open' && $this->isPastDue();
     }
 
     public function isTaken(): bool

@@ -2740,6 +2740,86 @@ void main() {
       },
     );
   });
+
+  group('Taken chore past due date', () {
+    test('Bounty.canSubmit is false when taken chore is beyond due date', () {
+      final past = DateTime.now().subtract(const Duration(minutes: 5));
+      final future = DateTime.now().add(const Duration(hours: 2));
+
+      final pastDueTaken = Bounty(
+        id: '201',
+        creatorId: '1',
+        assigneeId: '2',
+        title: 'Mop hallway',
+        status: 'claimed',
+        dueAt: past,
+      );
+      final futureTaken = Bounty(
+        id: '202',
+        creatorId: '1',
+        assigneeId: '2',
+        title: 'Mop hallway',
+        status: 'claimed',
+        dueAt: future,
+      );
+      const undatedTaken = Bounty(
+        id: '203',
+        creatorId: '1',
+        assigneeId: '2',
+        title: 'Mop hallway',
+        status: 'claimed',
+      );
+
+      expect(pastDueTaken.isTaken, isTrue);
+      expect(pastDueTaken.isDeadlinePassed, isTrue);
+      expect(pastDueTaken.canSubmit, isFalse);
+      expect(futureTaken.canSubmit, isTrue);
+      expect(undatedTaken.canSubmit, isTrue);
+    });
+
+    testWidgets(
+      'BountyDetailScreen hides proof input and Submit button when taken chore is past due',
+      (tester) async {
+        const assignee = AppUser(
+          id: 2,
+          name: 'Amy Farrah Fowler',
+          email: 'amy@example.com',
+        );
+        final pastDueClaimed = Bounty(
+          id: '204',
+          householdId: '2',
+          creatorId: '1',
+          creator: 'Sheldon Cooper',
+          assigneeId: '2',
+          assignee: 'Amy Farrah Fowler',
+          title: 'Take out recycling',
+          status: 'claimed',
+          points: 20,
+          dueAt: DateTime.now().subtract(const Duration(minutes: 10)),
+        );
+
+        final fakeService = _FakeSubmitBountyService();
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: BountyDetailScreen(
+              bounty: pastDueClaimed,
+              currentUser: assignee,
+              service: fakeService,
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('Submit for Review'), findsNothing);
+        expect(find.text('Open Camera'), findsNothing);
+        expect(find.text('Submission Note / Proof'), findsNothing);
+        expect(find.text('Past Due'), findsOneWidget);
+        expect(find.text('Abandon Quest'), findsOneWidget);
+        expect(fakeService.submitCalls, 0);
+      },
+    );
+  });
 }
 
 class _MemoryTokenStorage extends TokenStorage {
