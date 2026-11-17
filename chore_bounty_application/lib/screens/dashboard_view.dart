@@ -86,10 +86,7 @@ class _DashboardViewState extends State<DashboardView> {
     }
     return _visibleBounties
         .where((b) => b.isCompleted && b.assigneeId == widget.user.id.toString())
-        .fold<int>(
-          0,
-          (sum, b) => sum + (b.points > 0 ? b.points : (b.rewardValue?.toInt() ?? 0)),
-        );
+        .fold<int>(0, (sum, b) => sum + b.effectiveTokens);
   }
 
   int get _notificationCount {

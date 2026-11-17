@@ -207,11 +207,7 @@ class DashboardBountyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rewardDisplay = bounty.points > 0
-        ? bounty.points
-        : (bounty.rewardValue != null && bounty.rewardValue! > 0
-            ? bounty.rewardValue!.toInt()
-            : bounty.xpReward);
+    final rewardDisplay = bounty.effectiveTokens;
 
     final isCreator = (currentUserId != null &&
             currentUserId!.isNotEmpty &&

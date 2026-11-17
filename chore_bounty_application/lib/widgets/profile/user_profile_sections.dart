@@ -596,9 +596,7 @@ class _CompactActivityRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = bounty.points > 0
-        ? bounty.points
-        : (bounty.rewardValue?.toInt() ?? 0);
+    final tokens = bounty.effectiveTokens;
     final timestamp = bounty.completedAt ??
         bounty.submittedAt ??
         bounty.claimedAt ??

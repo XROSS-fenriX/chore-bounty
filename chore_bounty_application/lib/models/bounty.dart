@@ -74,6 +74,14 @@ class Bounty {
   bool get canCancel => isAvailable || isTaken;
   bool get canDelete => isAvailable || isCancelled || isExpired;
 
+  /// Effective token reward for this chore, matching backend `Bounty::tokens()`.
+  int get effectiveTokens {
+    if (points > 0) return points;
+    final rv = rewardValue?.round() ?? 0;
+    if (rv > 0) return rv;
+    return xpReward > 0 ? xpReward : 0;
+  }
+
   /// Enforces departure visibility rules on the client:
   /// - If the viewer has left the chore's household, only `completed` chores
   ///   executed by other household members remain visible.

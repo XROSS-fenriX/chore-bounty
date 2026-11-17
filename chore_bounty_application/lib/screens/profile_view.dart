@@ -71,11 +71,7 @@ class ProfileView extends StatelessWidget {
     final uid = currentUser.id.toString();
     return _visibleBounties
         .where((b) => b.assigneeId == uid && b.isCompleted)
-        .fold<int>(
-          0,
-          (sum, b) =>
-              sum + (b.points > 0 ? b.points : (b.rewardValue?.toInt() ?? 0)),
-        );
+        .fold<int>(0, (sum, b) => sum + b.effectiveTokens);
   }
 
   int get _effectiveCompletedCount {

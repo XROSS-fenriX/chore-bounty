@@ -98,6 +98,14 @@ class UserDetailScreen extends StatelessWidget {
       )
       .toList();
 
+  int get _effectiveTotalTokens {
+    if (totalTokens > 0) return totalTokens;
+    final uid = userId.toString();
+    return _visibleBounties
+        .where((b) => b.assigneeId == uid && b.isCompleted)
+        .fold<int>(0, (sum, b) => sum + b.effectiveTokens);
+  }
+
   int get _effectiveCompletedCount {
     if (completedCount > 0) return completedCount;
     final uid = userId.toString();
@@ -176,7 +184,7 @@ class UserDetailScreen extends StatelessWidget {
               isCurrentUser: isCurrentUser,
               statsRow: UserProfileStatsRow(
                 rank: rank,
-                totalTokens: totalTokens,
+                totalTokens: _effectiveTotalTokens,
                 completedCount: _effectiveCompletedCount,
                 standalone: false,
               ),

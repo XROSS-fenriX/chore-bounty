@@ -2655,6 +2655,91 @@ void main() {
       },
     );
   });
+
+  group('Departed housemate earned tokens', () {
+    testWidgets(
+      'UserDetailScreen displays earned tokens of a housemate who left the household',
+      (tester) async {
+        const activeUser = AppUser(
+          id: 1,
+          name: 'Sheldon Cooper',
+          email: 'sheldon@example.com',
+        );
+        const household = Household(
+          id: 10,
+          name: 'Apt 4A',
+          inviteCode: 'APT4A1',
+          createdBy: 1,
+          role: 'owner',
+          membersCount: 1,
+        );
+
+        // Penny (id: 3) and Howard (id: 4) already left the household.
+        const bounties = [
+          Bounty(
+            id: '101',
+            householdId: '10',
+            creatorId: '1',
+            creator: 'Sheldon Cooper',
+            assigneeId: '3',
+            assignee: 'Penny Teller',
+            title: 'Wipe kitchen counters',
+            status: 'completed',
+            points: 35,
+          ),
+          Bounty(
+            id: '102',
+            householdId: '10',
+            creatorId: '4',
+            creator: 'Howard Wolowitz',
+            assigneeId: '3',
+            assignee: 'Penny Teller',
+            title: 'Restock pantry',
+            status: 'completed',
+            points: 0,
+            rewardValue: 45.0,
+            isCreatorActiveMember: false,
+          ),
+          Bounty(
+            id: '103',
+            householdId: '10',
+            creatorId: '1',
+            creator: 'Sheldon Cooper',
+            assigneeId: '3',
+            assignee: 'Penny Teller',
+            title: 'Take out trash',
+            status: 'claimed',
+            points: 20,
+          ),
+        ];
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: UserDetailScreen(
+              currentUser: activeUser,
+              userId: 3,
+              name: 'Penny Teller',
+              totalTokens: 0,
+              completedCount: 0,
+              household: household,
+              bounties: bounties,
+              memberHouseholdIds: const {'10'},
+              activeMemberIds: const {'1'},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Rank is empty because departed member is not on the leaderboard,
+        // while Points and Completed reflect Penny's completed chores (35 + 45 = 80).
+        expect(find.text('—'), findsOneWidget);
+        expect(find.text('80'), findsOneWidget);
+        expect(find.text('2'), findsWidgets);
+        expect(find.text('Wipe kitchen counters'), findsOneWidget);
+        expect(find.text('Restock pantry'), findsOneWidget);
+      },
+    );
+  });
 }
 
 class _MemoryTokenStorage extends TokenStorage {

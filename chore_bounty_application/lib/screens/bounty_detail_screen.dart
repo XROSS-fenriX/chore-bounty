@@ -483,9 +483,7 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
       if (!mounted) return;
       setState(() => _isLoading = false);
 
-      final tokenAmount = _bounty.points > 0
-          ? _bounty.points
-          : (_bounty.rewardValue?.toInt() ?? 50);
+      final tokenAmount = _bounty.effectiveTokens;
       final assigneeName =
           (_bounty.assignee != null && _bounty.assignee!.trim().isNotEmpty)
               ? _bounty.assignee!.trim()
@@ -669,9 +667,7 @@ class _BountyDetailScreenState extends State<BountyDetailScreen> {
     const primaryGreen = Color(0xFF1B8354);
     const bgLight = Color(0xFFFAF8F5);
 
-    final tokenAmount = _bounty.points > 0
-        ? _bounty.points
-        : (_bounty.rewardValue?.toInt() ?? 50);
+    final tokenAmount = _bounty.effectiveTokens;
 
     final posterName = (_bounty.creator.isNotEmpty && _bounty.creator.toLowerCase() != 'you')
         ? _bounty.creator
