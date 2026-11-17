@@ -17,6 +17,7 @@ import 'package:chore_bounty_application/screens/household_prompt_screen.dart';
 import 'package:chore_bounty_application/screens/login_screen.dart';
 import 'package:chore_bounty_application/screens/register_screen.dart';
 import 'package:chore_bounty_application/screens/welcome_screen.dart';
+import 'package:chore_bounty_application/widgets/auth/auth_form_components.dart';
 import 'package:chore_bounty_application/widgets/bounty_form/bounty_category_icons.dart';
 import 'package:chore_bounty_application/widgets/bounty_form/bounty_date_time_picker.dart';
 import 'package:chore_bounty_application/widgets/dashboard/dashboard_bounty_card.dart';
@@ -3010,6 +3011,133 @@ void main() {
       expect(find.byTooltip('Generate new invite code'), findsNothing);
     });
   });
+
+  group('HouseholdPromptScreen minimalist redesign', () {
+    testWidgets(
+      'matches AuthPageScaffold / AuthTheme styling, validates inputs, and creates or joins a household',
+      (tester) async {
+        const user = AppUser(
+          id: 1,
+          name: 'Sheldon Cooper',
+          email: 'sheldon@example.com',
+        );
+        final storage = _MemoryTokenStorage();
+        final api = ApiClient(storage);
+        final auth = _FakeAuthService(api, storage);
+        final households = _FakeHouseholdSetupService();
+
+        Household? returnedHousehold;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: Center(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      returnedHousehold = await Navigator.push<Household?>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => HouseholdPromptScreen(
+                            user: user,
+                            auth: auth,
+                            households: households,
+                            isOptional: true,
+                          ),
+                        ),
+                      );
+                    },
+                    child: const Text('Open Setup'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.tap(find.text('Open Setup'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(AuthPageScaffold), findsOneWidget);
+        expect(find.byType(DashboardFilterPills), findsOneWidget);
+        expect(find.byType(AuthFieldGroup), findsOneWidget);
+        expect(find.byType(AuthPrimaryButton), findsOneWidget);
+        expect(find.byType(Image), findsNothing);
+        expect(find.text('Household Setup'), findsOneWidget);
+
+        // Empty validation shows AuthErrorBanner
+        await tester.tap(find.widgetWithText(FilledButton, 'Create Household'));
+        await tester.pump();
+        expect(find.byType(AuthErrorBanner), findsOneWidget);
+        expect(find.text('Please enter a household name.'), findsOneWidget);
+
+        // Switching mode clears error and shows Join by Code field
+        await tester.tap(find.text('Join by Code'));
+        await tester.pumpAndSettle();
+        expect(find.byType(AuthErrorBanner), findsNothing);
+        expect(find.text('Invite Code'), findsOneWidget);
+
+        await tester.tap(find.widgetWithText(FilledButton, 'Join Household'));
+        await tester.pump();
+        expect(find.text('Please enter an invite code.'), findsOneWidget);
+
+        await tester.enterText(
+          find.byKey(const ValueKey('join_household_code_field')),
+          'APT4B123',
+        );
+        await tester.tap(find.widgetWithText(FilledButton, 'Join Household'));
+        await tester.pumpAndSettle();
+
+        expect(households.lastJoinedCode, 'APT4B123');
+        expect(returnedHousehold?.name, 'Joined Place');
+
+        // Reopen and verify Create New flow
+        await tester.tap(find.text('Open Setup'));
+        await tester.pumpAndSettle();
+
+        await tester.enterText(
+          find.byKey(const ValueKey('create_household_name_field')),
+          'Apartment 4A',
+        );
+        await tester.tap(find.widgetWithText(FilledButton, 'Create Household'));
+        await tester.pumpAndSettle();
+
+        expect(households.lastCreatedName, 'Apartment 4A');
+        expect(returnedHousehold?.name, 'Apartment 4A');
+      },
+    );
+  });
+}
+
+class _FakeHouseholdSetupService extends HouseholdService {
+  _FakeHouseholdSetupService() : super(ApiClient(_MemoryTokenStorage()));
+
+  String? lastCreatedName;
+  String? lastJoinedCode;
+
+  @override
+  Future<Household> create(String name) async {
+    lastCreatedName = name;
+    return Household(
+      id: 10,
+      name: name,
+      inviteCode: 'NEWCODE1',
+      createdBy: 1,
+      role: 'owner',
+    );
+  }
+
+  @override
+  Future<Household> join(String inviteCode) async {
+    lastJoinedCode = inviteCode;
+    return const Household(
+      id: 11,
+      name: 'Joined Place',
+      inviteCode: 'APT4B123',
+      createdBy: 2,
+      role: 'member',
+    );
+  }
 }
 
 class _FakeChangePasswordAuthService extends AuthService {
