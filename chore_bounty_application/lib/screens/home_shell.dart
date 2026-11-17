@@ -709,6 +709,33 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
+  Future<void> handleRegenerateInviteCode(Household h) async {
+    try {
+      final updated = await widget.households.regenerateInviteCode(h.id);
+      if (!mounted) return;
+      setState(() {
+        myHouseholds = myHouseholds
+            .map((item) => item.id == h.id ? updated : item)
+            .toList();
+        if (currentHousehold?.id == h.id) {
+          currentHousehold = updated;
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('New invite code: ${updated.inviteCode}'),
+          backgroundColor: primaryGreen,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.households.error(e))),
+      );
+    }
+  }
+
   Future<void> handleRemoveMember(
     Household h,
     HouseholdMember member,
@@ -1454,6 +1481,7 @@ class _HomeShellState extends State<HomeShell> {
           onRenameHousehold: handleRenameHousehold,
           onRemoveMember: handleRemoveMember,
           onTransferOwnership: handleTransferOwnership,
+          onRegenerateInviteCode: handleRegenerateInviteCode,
           onLeaveHousehold: handleLeaveHousehold,
         );
       },

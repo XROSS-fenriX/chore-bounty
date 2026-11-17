@@ -72,6 +72,14 @@ class HouseholdService {
     return Household.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
+  Future<Household> regenerateInviteCode(int householdId) async {
+    final res = await api.dio.post(
+      '/households/$householdId/invite-code/regenerate',
+    );
+    final data = res.data is Map ? (res.data['data'] ?? res.data) : {};
+    return Household.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
   String error(Object e) {
     if (e is DioException) {
       final resData = e.response?.data;

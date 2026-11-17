@@ -11,6 +11,7 @@ import 'package:chore_bounty_application/models/household.dart';
 import 'package:chore_bounty_application/models/household_member.dart';
 import 'package:chore_bounty_application/models/leaderboard_entry.dart';
 import 'package:chore_bounty_application/screens/auth_gate.dart';
+import 'package:chore_bounty_application/screens/change_password_screen.dart';
 import 'package:chore_bounty_application/screens/home_shell.dart';
 import 'package:chore_bounty_application/screens/household_prompt_screen.dart';
 import 'package:chore_bounty_application/screens/login_screen.dart';
@@ -2820,6 +2821,219 @@ void main() {
       },
     );
   });
+
+  group('Change password and invite code regeneration', () {
+    Widget changePasswordHost(
+      _FakeChangePasswordAuthService auth,
+      void Function(bool?) onResult,
+    ) {
+      return MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: ElevatedButton(
+                onPressed: () async {
+                  final result = await Navigator.push<bool>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ChangePasswordScreen(auth: auth),
+                    ),
+                  );
+                  onResult(result);
+                },
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('ChangePasswordScreen validates input before calling the API',
+        (tester) async {
+      final auth = _FakeChangePasswordAuthService();
+      await tester.pumpWidget(changePasswordHost(auth, (_) {}));
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Update Password'));
+      await tester.pump();
+      expect(find.text('Current password is required.'), findsOneWidget);
+      expect(find.text('New password is required.'), findsOneWidget);
+
+      final fields = find.byType(TextFormField);
+      await tester.enterText(fields.at(0), 'old-password-1');
+      await tester.enterText(fields.at(1), 'short');
+      await tester.enterText(fields.at(2), 'other');
+      await tester.tap(find.text('Update Password'));
+      await tester.pump();
+      expect(find.text('Use at least 8 characters.'), findsOneWidget);
+      expect(find.text('Passwords do not match.'), findsOneWidget);
+
+      await tester.enterText(fields.at(1), 'old-password-1');
+      await tester.enterText(fields.at(2), 'old-password-1');
+      await tester.tap(find.text('Update Password'));
+      await tester.pump();
+      expect(
+        find.text('Use a password different from the current one.'),
+        findsOneWidget,
+      );
+      expect(auth.calls, 0);
+    });
+
+    testWidgets('ChangePasswordScreen submits values and closes on success',
+        (tester) async {
+      final auth = _FakeChangePasswordAuthService();
+      bool? result;
+      await tester.pumpWidget(changePasswordHost(auth, (r) => result = r));
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      final fields = find.byType(TextFormField);
+      await tester.enterText(fields.at(0), 'old-password-1');
+      await tester.enterText(fields.at(1), 'new-password-1');
+      await tester.enterText(fields.at(2), 'new-password-1');
+      await tester.tap(find.text('Update Password'));
+      await tester.pumpAndSettle();
+
+      expect(auth.calls, 1);
+      expect(auth.lastCurrent, 'old-password-1');
+      expect(auth.lastNew, 'new-password-1');
+      expect(auth.lastConfirmation, 'new-password-1');
+      expect(result, isTrue);
+      expect(find.byType(ChangePasswordScreen), findsNothing);
+    });
+
+    testWidgets('ChangePasswordScreen shows the API error and stays open',
+        (tester) async {
+      final request = RequestOptions(path: '/user/password');
+      final auth = _FakeChangePasswordAuthService(
+        errorToThrow: DioException(
+          requestOptions: request,
+          response: Response<dynamic>(
+            requestOptions: request,
+            statusCode: 422,
+            data: {
+              'errors': {
+                'current_password': ['The current password is incorrect.'],
+              },
+            },
+          ),
+        ),
+      );
+      await tester.pumpWidget(changePasswordHost(auth, (_) {}));
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      final fields = find.byType(TextFormField);
+      await tester.enterText(fields.at(0), 'wrong-password');
+      await tester.enterText(fields.at(1), 'new-password-1');
+      await tester.enterText(fields.at(2), 'new-password-1');
+      await tester.tap(find.text('Update Password'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('The current password is incorrect.'), findsOneWidget);
+      expect(find.byType(ChangePasswordScreen), findsOneWidget);
+    });
+
+    testWidgets('HouseholdView lets only the owner regenerate the invite code',
+        (tester) async {
+      const owner = AppUser(id: 1, name: 'Sheldon Cooper', email: 's@test.com');
+      const member = AppUser(id: 2, name: 'Leonard', email: 'l@test.com');
+      const asOwner = Household(
+        id: 10,
+        name: 'Apt 4A',
+        inviteCode: 'OLDCODE1',
+        createdBy: 1,
+        role: 'owner',
+        membersCount: 2,
+      );
+      const asMember = Household(
+        id: 10,
+        name: 'Apt 4A',
+        inviteCode: 'OLDCODE1',
+        createdBy: 1,
+        role: 'member',
+        membersCount: 2,
+      );
+      const members = [
+        HouseholdMember(
+          userId: 1,
+          name: 'Sheldon Cooper',
+          email: 's@test.com',
+          role: 'owner',
+        ),
+        HouseholdMember(
+          userId: 2,
+          name: 'Leonard',
+          email: 'l@test.com',
+          role: 'member',
+        ),
+      ];
+
+      Household? regenerated;
+      Widget build(AppUser user, Household household) => MaterialApp(
+            home: Scaffold(
+              body: HouseholdView(
+                currentUser: user,
+                currentHousehold: household,
+                members: members,
+                isLoading: false,
+                onRefresh: () async {},
+                onRegenerateInviteCode: (h) async => regenerated = h,
+              ),
+            ),
+          );
+
+      await tester.pumpWidget(build(owner, asOwner));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Generate new invite code'), findsOneWidget);
+
+      // Cancel keeps the current code.
+      await tester.tap(find.byTooltip('Generate new invite code'));
+      await tester.pumpAndSettle();
+      expect(find.text('Generate a new invite code?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(regenerated, isNull);
+
+      // Confirm calls the callback.
+      await tester.tap(find.byTooltip('Generate new invite code'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Generate'));
+      await tester.pumpAndSettle();
+      expect(regenerated?.id, 10);
+
+      // Members do not see the control.
+      await tester.pumpWidget(build(member, asMember));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Generate new invite code'), findsNothing);
+    });
+  });
+}
+
+class _FakeChangePasswordAuthService extends AuthService {
+  _FakeChangePasswordAuthService({this.errorToThrow})
+      : super(ApiClient(_MemoryTokenStorage()), _MemoryTokenStorage());
+
+  final DioException? errorToThrow;
+  int calls = 0;
+  String? lastCurrent;
+  String? lastNew;
+  String? lastConfirmation;
+
+  @override
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String confirmation,
+  }) async {
+    calls++;
+    lastCurrent = currentPassword;
+    lastNew = newPassword;
+    lastConfirmation = confirmation;
+    if (errorToThrow != null) throw errorToThrow!;
+  }
 }
 
 class _MemoryTokenStorage extends TokenStorage {

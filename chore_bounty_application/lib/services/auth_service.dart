@@ -132,6 +132,21 @@ class AuthService {
     }
   }
 
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String confirmation,
+  }) async {
+    await api.dio.put(
+      '/user/password',
+      data: {
+        'current_password': currentPassword,
+        'password': newPassword,
+        'password_confirmation': confirmation,
+      },
+    );
+  }
+
   Future<void> logout() async {
     try {
       await api.dio.post('/auth/logout');

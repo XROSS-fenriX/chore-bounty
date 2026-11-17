@@ -3,6 +3,7 @@ import '../core/constants/avatar_constants.dart';
 import '../models/app_user.dart';
 import '../services/auth_service.dart';
 import '../widgets/avatar/user_avatar_widget.dart';
+import 'change_password_screen.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({
@@ -186,11 +187,44 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ),
                 ),
               ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 48,
+                child: OutlinedButton.icon(
+                  onPressed: _isSaving ? null : _openChangePassword,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF0F172A),
+                    side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.2),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  icon: const Icon(Icons.lock_outline_rounded, size: 19),
+                  label: const Text(
+                    'Change Password',
+                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _openChangePassword() async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChangePasswordScreen(auth: widget.auth),
+      ),
+    );
+    if (changed == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password updated.')),
+      );
+    }
   }
 
   Widget _buildAvatarCard(Color primaryGreen) {

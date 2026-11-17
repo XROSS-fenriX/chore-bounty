@@ -25,6 +25,7 @@ class HouseholdView extends StatelessWidget {
     this.onRenameHousehold,
     this.onRemoveMember,
     this.onTransferOwnership,
+    this.onRegenerateInviteCode,
     this.onLeaveHousehold,
   });
 
@@ -44,6 +45,7 @@ class HouseholdView extends StatelessWidget {
       onRemoveMember;
   final Future<void> Function(Household household, HouseholdMember member)?
       onTransferOwnership;
+  final Future<void> Function(Household household)? onRegenerateInviteCode;
   final Future<void> Function(Household household)? onLeaveHousehold;
 
   ({int tokens, int bountiesCount}) _memberStats(HouseholdMember member) {
@@ -255,6 +257,23 @@ class HouseholdView extends StatelessWidget {
     }
   }
 
+  Future<void> _confirmRegenerateInviteCode(
+    BuildContext context,
+    Household household,
+  ) async {
+    final confirmed = await ConfirmActionDialog.show(
+      context,
+      title: 'Generate a new invite code?',
+      message:
+          'The current code for ${household.name} stops working. Current members stay in the household.',
+      confirmLabel: 'Generate',
+      confirmColor: AppModalDialog.warningAmber,
+    );
+    if (confirmed && onRegenerateInviteCode != null) {
+      await onRegenerateInviteCode!(household);
+    }
+  }
+
   Future<void> _confirmTransferOwnership(
     BuildContext context,
     Household household,
@@ -364,39 +383,66 @@ class HouseholdView extends StatelessWidget {
                 ),
                 if (household.inviteCode.isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  Material(
-                    color: const Color(0xFFDCFCE7),
-                    borderRadius: BorderRadius.circular(8),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () => _copyInviteCode(context, household.inviteCode),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 9,
-                          vertical: 4,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Code: ${household.inviteCode}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF15803D),
-                                letterSpacing: 0.4,
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Material(
+                          color: const Color(0xFFDCFCE7),
+                          borderRadius: BorderRadius.circular(8),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: () =>
+                                _copyInviteCode(context, household.inviteCode),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 9,
+                                vertical: 4,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      'Code: ${household.inviteCode}',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF15803D),
+                                        letterSpacing: 0.4,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  const Icon(
+                                    Icons.copy_rounded,
+                                    size: 13,
+                                    color: Color(0xFF15803D),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(width: 5),
-                            const Icon(
-                              Icons.copy_rounded,
-                              size: 13,
-                              color: Color(0xFF15803D),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
+                      if (household.isOwner && onRegenerateInviteCode != null)
+                        IconButton(
+                          tooltip: 'Generate new invite code',
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 32,
+                            minHeight: 28,
+                          ),
+                          onPressed: () =>
+                              _confirmRegenerateInviteCode(context, household),
+                          icon: const Icon(
+                            Icons.refresh_rounded,
+                            size: 18,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ],

@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
@@ -87,6 +88,36 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Authenticated user retrieved successfully.',
             'user' => new UserResource($user),
+        ]);
+    }
+
+    public function changePassword(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'string', 'min:8', 'confirmed', 'different:current_password'],
+        ]);
+
+        $user = $request->user();
+
+        if (! Hash::check($validated['current_password'], $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['The current password is incorrect.'],
+            ]);
+        }
+
+        $user->update(['password' => Hash::make($validated['password'])]);
+
+        // Sign out every other session, keep the one that made this request.
+        $currentToken = $user->currentAccessToken();
+        $otherTokens = $user->tokens();
+        if ($currentToken instanceof PersonalAccessToken) {
+            $otherTokens->where('id', '!=', $currentToken->id);
+        }
+        $otherTokens->delete();
+
+        return response()->json([
+            'message' => 'Password updated.',
         ]);
     }
 

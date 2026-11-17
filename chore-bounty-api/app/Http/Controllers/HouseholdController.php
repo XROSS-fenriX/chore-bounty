@@ -75,9 +75,36 @@ class HouseholdController extends Controller
     {
         Gate::authorize('delete', $household);
 
-        $household->delete();
+        // Deleting would erase every member's earned-token history, and the
+        // bounties foreign key blocks it anyway. Require an empty household.
+        abort_if(
+            $household->bounties()->withTrashed()->exists()
+                || $household->members()->where('users.id', '!=', $request->user()->id)->exists(),
+            422,
+            'Remove all chores and other members before deleting this household.'
+        );
+
+        DB::transaction(fn () => $household->delete());
 
         return response()->noContent();
+    }
+
+    public function regenerateInviteCode(Request $request, Household $household): JsonResponse
+    {
+        Gate::authorize('manageMembers', $household);
+
+        do {
+            $code = Str::upper(Str::random(8));
+        } while (Household::where('invite_code', $code)->exists());
+
+        $household->update(['invite_code' => $code]);
+
+        return response()->json([
+            'message' => 'Invite code regenerated.',
+            'data' => new HouseholdResource(
+                $household->fresh()->load(['creator'])->loadCount(['members', 'bounties'])
+            ),
+        ]);
     }
 
     public function joinByCode(Request $request): JsonResponse

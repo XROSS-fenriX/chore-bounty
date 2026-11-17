@@ -34,6 +34,7 @@ Route::middleware('auth:sanctum')->group(function () {
         new \App\Http\Resources\UserResource($request->user())
     );
     Route::put('/user/avatar', [UserController::class, 'updateAvatar']);
+    Route::put('/user/password', [AuthController::class, 'changePassword'])->middleware('throttle:5,1');
 
     Route::apiResource('users', UserController::class)
         ->only(['index', 'show', 'update']);
@@ -42,6 +43,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('households/join', [HouseholdController::class, 'joinByCode'])->middleware('throttle:15,1');
     Route::post('households/{household}/leave', [HouseholdController::class, 'leave']);
     Route::post('households/{household}/transfer-ownership', [HouseholdController::class, 'transferOwnership']);
+    Route::post('households/{household}/invite-code/regenerate', [HouseholdController::class, 'regenerateInviteCode']);
     Route::apiResource('households', HouseholdController::class);
     Route::get('households/{household}/leaderboard', [LeaderboardController::class, 'index']);
     Route::get('leaderboard', [LeaderboardController::class, 'current']);
