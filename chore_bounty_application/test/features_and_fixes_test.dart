@@ -961,6 +961,19 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
+      final brandImage = tester.widget<Image>(
+        find.descendant(
+          of: find.byType(BrandMark),
+          matching: find.byType(Image),
+        ),
+      );
+      final provider = brandImage.image is ResizeImage
+          ? (brandImage.image as ResizeImage).imageProvider
+          : brandImage.image;
+      expect(
+        (provider as AssetImage).assetName,
+        'assets/images/chore_bounty_icon.png',
+      );
       expect(find.text('Turn Chores Into Bounties'), findsOneWidget);
       expect(find.text('Get Started'), findsOneWidget);
       expect(find.text('Sign In'), findsOneWidget);

@@ -43,19 +43,31 @@ class BrandMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Image.asset(
-      'assets/images/welcome_hero_logo.png',
+    final radius = BorderRadius.circular(size * 0.24);
+    return Container(
       width: size,
       height: size,
-      cacheWidth: (size * 2).ceil(),
-      fit: BoxFit.contain,
-      errorBuilder: (context, error, stackTrace) {
-        return Icon(
-          Icons.emoji_events_rounded,
-          size: size * 0.6,
-          color: const Color(0xFFFFB52E),
-        );
-      },
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.4),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular((size * 0.24) - 1),
+        child: Image.asset(
+          'assets/images/chore_bounty_icon.png',
+          width: size,
+          height: size,
+          cacheWidth: (size * 2).ceil(),
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Icon(
+              Icons.emoji_events_rounded,
+              size: size * 0.6,
+              color: const Color(0xFFFFB52E),
+            );
+          },
+        ),
+      ),
     );
   }
 }
