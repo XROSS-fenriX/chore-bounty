@@ -187,6 +187,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  Widget _buildMiddleNameField() {
+    return AuthFieldGroup(
+      label: 'Middle Name',
+      isOptional: true,
+      child: TextField(
+        controller: _middleName,
+        textCapitalization: TextCapitalization.words,
+        textInputAction: TextInputAction.next,
+        autofillHints: const [AutofillHints.middleName],
+        style: AuthTheme.inputTextStyle,
+        decoration: authInputDecoration(
+          hintText: 'Leakey',
+          prefixIcon: Icons.person_outline_rounded,
+        ),
+      ),
+    );
+  }
+
   Widget _buildLastNameField() {
     return AuthFieldGroup(
       label: 'Last Name',
@@ -245,7 +263,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   children: [
                     Expanded(child: _buildFirstNameField()),
                     const SizedBox(width: 12),
-                    Expanded(child: _buildLastNameField()),
+                    Expanded(child: _buildMiddleNameField()),
                   ],
                 );
               }
@@ -253,27 +271,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 children: [
                   _buildFirstNameField(),
                   const SizedBox(height: 16),
-                  _buildLastNameField(),
+                  _buildMiddleNameField(),
                 ],
               );
             },
           ),
           const SizedBox(height: 16),
-          AuthFieldGroup(
-            label: 'Middle Name',
-            isOptional: true,
-            child: TextField(
-              controller: _middleName,
-              textCapitalization: TextCapitalization.words,
-              textInputAction: TextInputAction.next,
-              autofillHints: const [AutofillHints.middleName],
-              style: AuthTheme.inputTextStyle,
-              decoration: authInputDecoration(
-                hintText: 'Leakey',
-                prefixIcon: Icons.person_outline_rounded,
-              ),
-            ),
-          ),
+          _buildLastNameField(),
           const SizedBox(height: 16),
           AuthFieldGroup(
             label: 'Gender',

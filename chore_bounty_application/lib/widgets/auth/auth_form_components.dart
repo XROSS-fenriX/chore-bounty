@@ -202,7 +202,10 @@ class AuthFieldGroup extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 6),
-          child: Row(
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 2,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
                 label,
@@ -212,8 +215,7 @@ class AuthFieldGroup extends StatelessWidget {
                   color: AuthTheme.label,
                 ),
               ),
-              if (isOptional) ...[
-                const SizedBox(width: 6),
+              if (isOptional)
                 const Text(
                   'Optional',
                   style: TextStyle(
@@ -222,7 +224,6 @@ class AuthFieldGroup extends StatelessWidget {
                     color: AuthTheme.hint,
                   ),
                 ),
-              ],
             ],
           ),
         ),

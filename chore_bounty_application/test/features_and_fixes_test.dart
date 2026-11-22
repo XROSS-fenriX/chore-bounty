@@ -1069,7 +1069,8 @@ void main() {
 
       final fields = find.byType(TextField);
       await tester.enterText(fields.at(0), 'Leonard');
-      await tester.enterText(fields.at(1), 'Hofstadter');
+      await tester.enterText(fields.at(1), 'Leakey');
+      await tester.enterText(fields.at(2), 'Hofstadter');
 
       await tester.tap(find.byType(DropdownButtonFormField<String>));
       await tester.pumpAndSettle();
